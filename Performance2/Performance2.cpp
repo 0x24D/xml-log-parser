@@ -4,7 +4,11 @@
 #include "stdafx.h"
 #include "Performance2.h"
 
+#include <algorithm>
+#include <fstream>
 #include <iostream>
+#include <istream>
+#include <string>
 
 #ifdef _DEBUG
 #define new DEBUG_NEW
@@ -122,9 +126,41 @@ int _tmain(int argc, TCHAR* argv[], TCHAR* envp[])
 
 		//--------------------------------------------------------------------------------------
 		// Insert your code from here...
+        const string sessionStartTag = "<sessionid>";
+        const string sessionEndTag = "</sessionid>";
+        const string ipStartTag = "<ipaddress>";
+        const string ipEndTag = "</ipaddress>";
+        const string browserStartTag = "<browser>";
+        const string browserEndTag = "</browser>";
+        const string pathStartTag = "<path>";
+        const string pathEndTag = "</path>";
+        const string timeStartTag = "<time>";
+        const string timeEndTag = "</time>";
 
-
-
+        ifstream xmlFile("testdata\\1.xml");
+        string line;
+        while (xmlFile >> line) {
+            // sessionid
+            auto sessionStartTagBegin = line.find(sessionStartTag);
+            auto sessionEndTagBegin = line.find(sessionEndTag);
+            auto sessionIdBegin = sessionStartTagBegin + sessionStartTag.length();
+            string sessionId(line, sessionIdBegin, sessionEndTagBegin - sessionIdBegin);
+            cout << sessionId << '\n';
+            // ipaddress
+            auto ipStartTagBegin = line.find(ipStartTag);
+            auto ipEndTagBegin = line.find(ipEndTag);
+            auto ipAddressBegin = ipStartTagBegin + ipStartTag.length();
+            string ipAddress(line, ipAddressBegin, ipEndTagBegin - ipAddressBegin);
+            cout << ipAddress << '\n';
+            // browser
+            auto browserStartTagBegin = line.find(browserStartTag);
+            auto browserEndTagBegin = line.find(browserEndTag);
+            auto browserBegin = browserStartTagBegin + browserStartTag.length();
+            string browser(line, browserBegin, browserEndTagBegin - browserBegin);
+            cout << browser << '\n';
+            // multiple - path: time
+            break;
+        }
 
 		//-------------------------------------------------------------------------------------------------------
 		// How long did it take?...   DO NOT CHANGE FROM HERE...

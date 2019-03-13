@@ -139,7 +139,7 @@ int _tmain(int argc, TCHAR* argv[], TCHAR* envp[])
 
         ifstream xmlFile("testdata\\1.xml");
         string line;
-        while (xmlFile >> line) {
+        while (getline(xmlFile, line)) {
             // sessionid
             auto sessionStartTagBegin = line.find(sessionStartTag);
             auto sessionEndTagBegin = line.find(sessionEndTag);
@@ -159,6 +159,21 @@ int _tmain(int argc, TCHAR* argv[], TCHAR* envp[])
             string browser(line, browserBegin, browserEndTagBegin - browserBegin);
             cout << browser << '\n';
             // multiple - path: time
+            int pos = 0;
+            auto pathStartTagBegin = line.find(pathStartTag);
+            while (pathStartTagBegin != string::npos){
+                auto pathEndTagBegin = line.find(pathEndTag, pos);
+                auto pathBegin = pathStartTagBegin + pathStartTag.length();
+                string path(line, pathBegin, pathEndTagBegin - pathBegin);
+                cout << path << '\n';
+                auto timeStartTagBegin = line.find(timeStartTag, pos);
+                auto timeEndTagBegin = line.find(timeEndTag, pos);
+                auto timeBegin = timeStartTagBegin + timeStartTag.length();
+                string time(line, timeBegin, timeEndTagBegin - timeBegin);
+                cout << time << '\n';
+                pos = timeEndTagBegin + timeEndTag.length();
+                pathStartTagBegin = line.find(pathStartTag, pos);
+            }
             break;
         }
 

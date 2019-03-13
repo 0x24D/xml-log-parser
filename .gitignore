@@ -378,3 +378,5 @@ ASALocalRun/
 healthchecksdb
 
 # End of https://www.gitignore.io/api/c++,visualstudio
+
+log.xml

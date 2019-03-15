@@ -12,3 +12,33 @@
   * The time duration for each session (i.e. the time duration for each session, from the first page access to the last).
   * The average time users spend on the site.
   * The number of times users with the same IP address visit the site.
+
+```
+// JSON
+{
+  [
+    session_id: $session_id,
+    ip_address: $ip_address,
+    browser: $browser,
+    page_views: [
+      {
+        path: $path,
+        time: $time
+      },
+      {
+        path: $path2,
+        time: $time2
+      }
+    ]
+  ]
+}
+
+// C++
+std::vector
+session_id: string,
+ip_address: string
+browser: string
+paths: std::vector
+times: std::vector
+... because maps are bad for performance
+```

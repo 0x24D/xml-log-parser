@@ -4,11 +4,12 @@
 #include "stdafx.h"
 #include "Performance2.h"
 
-#include <algorithm>
+#include <array>
 #include <fstream>
 #include <iostream>
 #include <istream>
 #include <string>
+#include <vector>
 
 #ifdef _DEBUG
 #define new DEBUG_NEW
@@ -126,6 +127,13 @@ int _tmain(int argc, TCHAR* argv[], TCHAR* envp[])
 
 		//--------------------------------------------------------------------------------------
 		// Insert your code from here...
+        struct logItem {
+            string sessionId;
+            string ipAddress;
+            string browser;
+            vector<string> paths;
+            vector<string> times;
+        };
         const string sessionStartTag = "<sessionid>";
         const string sessionEndTag = "</sessionid>";
         const string ipStartTag = "<ipaddress>";
@@ -137,44 +145,55 @@ int _tmain(int argc, TCHAR* argv[], TCHAR* envp[])
         const string timeStartTag = "<time>";
         const string timeEndTag = "</time>";
 
-        ifstream xmlFile("testdata\\1.xml");
+        ifstream xmlFile("testdata\\2.xml");
         string line;
+        vector<logItem> logData;
         while (getline(xmlFile, line)) {
+            logItem item;
             // sessionid
             auto sessionStartTagBegin = line.find(sessionStartTag);
             auto sessionEndTagBegin = line.find(sessionEndTag);
             auto sessionIdBegin = sessionStartTagBegin + sessionStartTag.length();
             string sessionId(line, sessionIdBegin, sessionEndTagBegin - sessionIdBegin);
             cout << sessionId << '\n';
+            item.sessionId = sessionId;
             // ipaddress
             auto ipStartTagBegin = line.find(ipStartTag);
             auto ipEndTagBegin = line.find(ipEndTag);
             auto ipAddressBegin = ipStartTagBegin + ipStartTag.length();
             string ipAddress(line, ipAddressBegin, ipEndTagBegin - ipAddressBegin);
             cout << ipAddress << '\n';
+            item.ipAddress = ipAddress;
             // browser
             auto browserStartTagBegin = line.find(browserStartTag);
             auto browserEndTagBegin = line.find(browserEndTag);
             auto browserBegin = browserStartTagBegin + browserStartTag.length();
             string browser(line, browserBegin, browserEndTagBegin - browserBegin);
             cout << browser << '\n';
+            item.browser = browser;
             // multiple - path: time
             int pos = 0;
             auto pathStartTagBegin = line.find(pathStartTag);
-            while (pathStartTagBegin != string::npos){
+            vector<string> paths;
+            vector<string> times;
+            while (pathStartTagBegin != string::npos) {
                 auto pathEndTagBegin = line.find(pathEndTag, pos);
                 auto pathBegin = pathStartTagBegin + pathStartTag.length();
                 string path(line, pathBegin, pathEndTagBegin - pathBegin);
                 cout << path << '\n';
+                paths.push_back(path);
                 auto timeStartTagBegin = line.find(timeStartTag, pos);
                 auto timeEndTagBegin = line.find(timeEndTag, pos);
                 auto timeBegin = timeStartTagBegin + timeStartTag.length();
                 string time(line, timeBegin, timeEndTagBegin - timeBegin);
                 cout << time << '\n';
+                times.push_back(time);
                 pos = timeEndTagBegin + timeEndTag.length();
                 pathStartTagBegin = line.find(pathStartTag, pos);
             }
-            break;
+            item.paths = paths;
+            item.times = times;
+            logData.push_back(item);
         }
 
 		//-------------------------------------------------------------------------------------------------------

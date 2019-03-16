@@ -380,3 +380,4 @@ healthchecksdb
 # End of https://www.gitignore.io/api/c++,visualstudio
 
 log.xml
+Performance2/testdata/*.json

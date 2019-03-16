@@ -127,7 +127,7 @@ int _tmain(int argc, TCHAR* argv[], TCHAR* envp[])
 
 		//--------------------------------------------------------------------------------------
 		// Insert your code from here...
-        struct logItem {
+        struct LogItem {
             string sessionId;
             string ipAddress;
             string browser;
@@ -145,34 +145,29 @@ int _tmain(int argc, TCHAR* argv[], TCHAR* envp[])
         const string timeStartTag = "<time>";
         const string timeEndTag = "</time>";
 
-        ifstream xmlFile("testdata\\2.xml");
+        const string testFile = "testdata\\2";
+        ifstream xmlFile(testFile + ".xml");
         string line;
-        vector<logItem> logData;
+        vector<LogItem> logData;
+        // Parse XML file
         while (getline(xmlFile, line)) {
-            logItem item;
-            // sessionid
+            LogItem item;
             auto sessionStartTagBegin = line.find(sessionStartTag);
             auto sessionEndTagBegin = line.find(sessionEndTag);
             auto sessionIdBegin = sessionStartTagBegin + sessionStartTag.length();
             string sessionId(line, sessionIdBegin, sessionEndTagBegin - sessionIdBegin);
-            cout << sessionId << '\n';
             item.sessionId = sessionId;
-            // ipaddress
             auto ipStartTagBegin = line.find(ipStartTag);
             auto ipEndTagBegin = line.find(ipEndTag);
             auto ipAddressBegin = ipStartTagBegin + ipStartTag.length();
             string ipAddress(line, ipAddressBegin, ipEndTagBegin - ipAddressBegin);
-            cout << ipAddress << '\n';
             item.ipAddress = ipAddress;
-            // browser
             auto browserStartTagBegin = line.find(browserStartTag);
             auto browserEndTagBegin = line.find(browserEndTag);
             auto browserBegin = browserStartTagBegin + browserStartTag.length();
             string browser(line, browserBegin, browserEndTagBegin - browserBegin);
-            cout << browser << '\n';
             item.browser = browser;
-            // multiple - path: time
-            int pos = 0;
+            size_t pos = 0;
             auto pathStartTagBegin = line.find(pathStartTag);
             vector<string> paths;
             vector<string> times;
@@ -180,13 +175,11 @@ int _tmain(int argc, TCHAR* argv[], TCHAR* envp[])
                 auto pathEndTagBegin = line.find(pathEndTag, pos);
                 auto pathBegin = pathStartTagBegin + pathStartTag.length();
                 string path(line, pathBegin, pathEndTagBegin - pathBegin);
-                cout << path << '\n';
                 paths.push_back(path);
                 auto timeStartTagBegin = line.find(timeStartTag, pos);
                 auto timeEndTagBegin = line.find(timeEndTag, pos);
                 auto timeBegin = timeStartTagBegin + timeStartTag.length();
                 string time(line, timeBegin, timeEndTagBegin - timeBegin);
-                cout << time << '\n';
                 times.push_back(time);
                 pos = timeEndTagBegin + timeEndTag.length();
                 pathStartTagBegin = line.find(pathStartTag, pos);
@@ -195,6 +188,38 @@ int _tmain(int argc, TCHAR* argv[], TCHAR* envp[])
             item.times = times;
             logData.push_back(item);
         }
+        xmlFile.close();
+        // Construct JSON file
+        auto logDataSize = logData.size();
+        string outputJSON = "{\n";
+        for (decltype(logDataSize) i = 0; i < logDataSize; ++i) {
+            outputJSON += "  \"session\": [\n    {\n";
+            outputJSON += "      \"session_id\": \"" + logData[i].sessionId + "\",\n";
+            outputJSON += "      \"ip_address\": \"" + logData[i].ipAddress + "\",\n";
+            outputJSON += "      \"browser\": \"" + logData[i].browser + "\",\n";
+            outputJSON += "      \"page_views\": [\n";
+            auto pathsSize = logData[i].paths.size();
+            for (decltype(pathsSize) j = 0; j < pathsSize; ++j) {
+                outputJSON += "        {\n";
+                outputJSON += "          \"path\": \"" + logData[i].paths[j] + "\",\n";
+                outputJSON += "          \"time\": \"" + logData[i].times[j] + "\"\n";
+                outputJSON += "        }";
+                if (j != pathsSize - 1) {
+                    outputJSON += ",";
+                }
+                outputJSON += "\n";
+            }
+            outputJSON += "      ]\n    }\n  ]";
+            if (i != logDataSize - 1) {
+                outputJSON += ",";
+            }
+            outputJSON += "\n";
+        }
+        outputJSON += "}";
+        // Output to .json file
+        ofstream jsonFile(testFile + ".json");
+        jsonFile << outputJSON;
+        jsonFile.close();
 
 		//-------------------------------------------------------------------------------------------------------
 		// How long did it take?...   DO NOT CHANGE FROM HERE...

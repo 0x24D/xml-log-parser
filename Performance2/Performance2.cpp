@@ -106,8 +106,6 @@ CWinApp theApp;  // The one and only application object
 
 using namespace std;
 
-
-
 int _tmain(int argc, TCHAR* argv[], TCHAR* envp[])
 {
 	int nRetCode = 0;
@@ -193,7 +191,7 @@ int _tmain(int argc, TCHAR* argv[], TCHAR* envp[])
         auto logDataSize = logData.size();
         string outputJSON = "{\n";
         for (decltype(logDataSize) i = 0; i < logDataSize; ++i) {
-            outputJSON += "  \"session\": [\n    {\n";
+            outputJSON += "  \"entry\": [\n    {\n";
             outputJSON += "      \"session_id\": \"" + logData[i].sessionId + "\",\n";
             outputJSON += "      \"ip_address\": \"" + logData[i].ipAddress + "\",\n";
             outputJSON += "      \"browser\": \"" + logData[i].browser + "\",\n";

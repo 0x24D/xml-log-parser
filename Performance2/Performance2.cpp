@@ -4,10 +4,15 @@
 #include "stdafx.h"
 #include "Performance2.h"
 
+#include <algorithm>
 #include <array>
+#include <cmath>
+#include <ctime>
 #include <fstream>
+#include <iomanip>  
 #include <iostream>
 #include <istream>
+#include <sstream>
 #include <string>
 #include <vector>
 
@@ -232,11 +237,42 @@ int _tmain(int argc, TCHAR* argv[], TCHAR* envp[])
             logData.push_back(parser.parseLogLine(line));
         }
         xmlFile.close();
+        // Calculate time per session
+        vector<string> sessionIds;
+        vector<string> durations;
+        for (LogItem item : logData) {
+            sessionIds.push_back(item.sessionId);
+            if (item.times.size() == 1) {
+                durations.push_back("00:00:00");
+            } else {
+                struct tm latestDateTm;
+                istringstream(item.times[item.times.size() - 1]) >> std::get_time(&latestDateTm, "%d/%m/%Y %H:%M:%S");
+
+                struct tm oldestDateTm;
+                istringstream(item.times[0]) >> std::get_time(&oldestDateTm, "%d/%m/%Y %H:%M:%S");
+
+                int differenceInSeconds = difftime(mktime(&latestDateTm), mktime(&oldestDateTm));
+
+                auto hour = differenceInSeconds / 3600;
+                auto minute = (differenceInSeconds % 3600) / 60;
+                auto second = differenceInSeconds % 60;
+                ostringstream hourStream;
+                hourStream << std::setw(2) << std::setfill('0') << hour;
+                ostringstream minuteStream;
+                minuteStream << std::setw(2) << std::setfill('0') << minute;
+                ostringstream secondStream;
+                secondStream << std::setw(2) << std::setfill('0') << second;
+                durations.push_back(hourStream.str() + ":" + minuteStream.str() + ":" + secondStream.str());
+            }
+        }
+        for (string duration : durations) {
+            cout << duration << "\n";
+        }
         // Construct JSON file
-        string outputJson = parser.constructLogJson(logData);
-        
-        // Output to .json file
-        parser.outputToFile(testFile + ".json", outputJson);
+        //string outputJson = parser.constructLogJson(logData);
+        //
+        //// Output to .json file
+        //parser.outputToFile(testFile + ".json", outputJson);
 
 		//-------------------------------------------------------------------------------------------------------
 		// How long did it take?...   DO NOT CHANGE FROM HERE...

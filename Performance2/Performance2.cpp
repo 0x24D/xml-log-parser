@@ -12,6 +12,7 @@
 #include <iomanip>  
 #include <iostream>
 #include <istream>
+#include <numeric>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -239,11 +240,11 @@ int _tmain(int argc, TCHAR* argv[], TCHAR* envp[])
         xmlFile.close();
         // Calculate time per session
         vector<string> sessionIds;
-        vector<string> durations;
+        vector<double> durations;
         for (LogItem item : logData) {
             sessionIds.push_back(item.sessionId);
             if (item.times.size() == 1) {
-                durations.push_back("00:00:00");
+                durations.push_back(0);
             } else {
                 struct tm latestDateTm;
                 istringstream(item.times[item.times.size() - 1]) >> std::get_time(&latestDateTm, "%d/%m/%Y %H:%M:%S");
@@ -251,9 +252,10 @@ int _tmain(int argc, TCHAR* argv[], TCHAR* envp[])
                 struct tm oldestDateTm;
                 istringstream(item.times[0]) >> std::get_time(&oldestDateTm, "%d/%m/%Y %H:%M:%S");
 
-                int differenceInSeconds = difftime(mktime(&latestDateTm), mktime(&oldestDateTm));
+                auto differenceInSeconds = difftime(mktime(&latestDateTm), mktime(&oldestDateTm));
+                durations.push_back(differenceInSeconds);
 
-                auto hour = differenceInSeconds / 3600;
+                /*auto hour = differenceInSeconds / 3600;
                 auto minute = (differenceInSeconds % 3600) / 60;
                 auto second = differenceInSeconds % 60;
                 ostringstream hourStream;
@@ -262,12 +264,15 @@ int _tmain(int argc, TCHAR* argv[], TCHAR* envp[])
                 minuteStream << std::setw(2) << std::setfill('0') << minute;
                 ostringstream secondStream;
                 secondStream << std::setw(2) << std::setfill('0') << second;
-                durations.push_back(hourStream.str() + ":" + minuteStream.str() + ":" + secondStream.str());
+                durations.push_back(hourStream.str() + ":" + minuteStream.str() + ":" + secondStream.str());*/
             }
         }
-        for (string duration : durations) {
+        for (double duration : durations) {
             cout << duration << "\n";
         }
+        auto totalDuration = accumulate(durations.begin(), durations.end(), 0.0);
+        auto averageDuration = totalDuration / durations.size();
+        cout << averageDuration << "\n";
         // Construct JSON file
         //string outputJson = parser.constructLogJson(logData);
         //

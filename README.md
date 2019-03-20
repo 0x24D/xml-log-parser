@@ -16,7 +16,7 @@
 ```
 // log.json
 {
-  "entry":  [
+  "entries":  [
     {
       "session_id": $session_id,
       "ip_address": $ip_address,
@@ -31,8 +31,8 @@
           "time": $time2
         }
       ]
-    ]
-  }
+    }
+  ]
 }
 
 // C++

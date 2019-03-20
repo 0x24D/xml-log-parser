@@ -188,7 +188,7 @@ public:
         auto logDataSize = logData.size();
         string outputJSON = "{\n";
         for (decltype(logDataSize) i = 0; i < logDataSize; ++i) {
-            outputJSON += "  \"entry\": [\n    {\n";
+            outputJSON += "  \"entries\": [\n    {\n";
             outputJSON += "      \"session_id\": \"" + logData[i].sessionId + "\",\n";
             outputJSON += "      \"ip_address\": \"" + logData[i].ipAddress + "\",\n";
             outputJSON += "      \"browser\": \"" + logData[i].browser + "\",\n";

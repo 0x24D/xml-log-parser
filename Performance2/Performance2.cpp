@@ -124,7 +124,7 @@ struct LogItem {
 
 class XMLParser {
 public:
-    LogItem parseLogLine(string line) {
+    LogItem parseLogLine(const string& line) {
         LogItem item;
         auto sessionStartTagBegin = line.find(sessionStartTag);
         auto sessionEndTagBegin = line.find(sessionEndTag);
@@ -166,7 +166,7 @@ public:
         auto totalDuration = accumulate(durations.begin(), durations.end(), 0.0);
         return totalDuration / durations.size();
     }
-    pair<vector<string>, vector<float>> calculateDurations(vector<LogItem> logData) {
+    pair<vector<string>, vector<float>> calculateDurations(const vector<LogItem>& logData) {
         vector<string> sessionIds;
         vector<float> durations;
         for (LogItem item : logData) {
@@ -186,7 +186,7 @@ public:
         }
         return { sessionIds, durations };
     }
-    string constructLogJson(vector<LogItem> logData) {
+    string constructLogJson(const vector<LogItem>& logData) {
         auto logDataSize = logData.size();
         string outputJSON = "{\n";
         for (decltype(logDataSize) i = 0; i < logDataSize; ++i) {
@@ -215,7 +215,7 @@ public:
         outputJSON += "}";
         return outputJSON;
     }
-     string constructStatisticsJson(vector<string> sessionIds, vector<float> durations, float averageDuration) {
+     string constructStatisticsJson(const vector<string>& sessionIds, const vector<float>& durations, const float& averageDuration) {
          auto sessionsSize = sessionIds.size();
         string outputJSON = "{\n";
         outputJSON += "  \"time_durations\": [\n";
@@ -234,7 +234,7 @@ public:
         outputJSON += "}";
         return outputJSON;
     }
-    void outputToFile(string json, string fileName) {
+    void outputToFile(const string& json, const string& fileName) {
         ofstream jsonFile(fileName);
         jsonFile << json;
         jsonFile.close();

@@ -9,8 +9,8 @@
 ## Purpose
 * Translate the XML file to a corresponding JSON formatted file. This should have the '.json' file extension. (implemented - single threaded)
 * Generate a second JSON formatted file that contains statistics for the usage of the website:
-  * The time duration for each session (i.e. the time duration for each session, from the first page access to the last). (implemented, no file output - single threaded)
-  * The average time users spend on the site. (implemented, no file output - single threaded)
+  * The time duration for each session (i.e. the time duration for each session, from the first page access to the last). (implemented - single threaded)
+  * The average time users spend on the site. (implemented - single threaded)
   * The number of times users with the same IP address visit the site.
 
 ```
@@ -46,23 +46,13 @@ times: std::vector<string>>
 
 // statistics.json
 {
-  "statistics": {
-    "time_durations": [
-      {
-        "session_id": $session_id,
-        "duration": $duration
-      }
-    ],
-    "average_time": $average_time,
-    // either
-    "duplicate_views": $duplicate_views
-    // or
-    "duplicate_views": [
-      {
-        "ip_address": $ip_address,
-        "views": $views
-      }
-    ]
-  }
+  "time_durations": [
+    {
+      "session_id": $session_id,
+      "duration": $duration
+    }
+  ],
+  "average_time": $average_time,
+  "duplicate_views": $duplicate_views
 }
 ```

@@ -15,6 +15,8 @@
 #include <numeric>
 #include <sstream>
 #include <string>
+#include <tuple>
+#include <utility>
 #include <vector>
 
 #ifdef _DEBUG
@@ -164,7 +166,7 @@ public:
         auto totalDuration = accumulate(durations.begin(), durations.end(), 0.0);
         return totalDuration / durations.size();
     }
-    vector<float> calculateDurations(vector<LogItem> logData) {
+    pair<vector<string>, vector<float>> calculateDurations(vector<LogItem> logData) {
         vector<string> sessionIds;
         vector<float> durations;
         for (LogItem item : logData) {
@@ -182,7 +184,7 @@ public:
                 durations.push_back(differenceInSeconds);
             }
         }
-        return durations;
+        return { sessionIds, durations };
     }
     string constructLogJson(vector<LogItem> logData) {
         auto logDataSize = logData.size();
@@ -213,7 +215,26 @@ public:
         outputJSON += "}";
         return outputJSON;
     }
-    void outputToFile(string fileName, string json) {
+     string constructStatisticsJson(vector<string> sessionIds, vector<float> durations, float averageDuration) {
+         auto sessionsSize = sessionIds.size();
+        string outputJSON = "{\n";
+        outputJSON += "  \"time_durations\": [\n";
+        for (decltype(sessionsSize) i = 0; i < sessionsSize; ++i) {
+            outputJSON += "    {\n";
+            outputJSON += "      \"session_id\": \"" + sessionIds[i] + "\",\n";
+            outputJSON += "      \"duration\": " + to_string(durations[i]) + "\n";
+            outputJSON += "    }";
+            if (i != sessionsSize - 1) {
+                outputJSON += ",";
+            }
+            outputJSON += "\n";
+        }
+        outputJSON += "  ],\n";
+        outputJSON += "  \"average_duration\": " + to_string(averageDuration) + "\n";
+        outputJSON += "}";
+        return outputJSON;
+    }
+    void outputToFile(string json, string fileName) {
         ofstream jsonFile(fileName);
         jsonFile << json;
         jsonFile.close();
@@ -263,19 +284,18 @@ int _tmain(int argc, TCHAR* argv[], TCHAR* envp[])
         }
         xmlFile.close();
         // Calculate time per session
-        vector<float> durations = parser.calculateDurations(logData);
-        for (float duration : durations) {
-            cout << duration << "\n";
-        }
+        vector<string> sessionIds;
+        vector<float> durations; 
+        tie(sessionIds, durations) = parser.calculateDurations(logData);
         // Calculate average session time
         float averageDuration = parser.calculateAverageDuration(durations);
-        cout << averageDuration << "\n";
-        // Construct JSON file
-        //string outputJson = parser.constructLogJson(logData);
-        //
-        //// Output to .json file
-        //parser.outputToFile(testFile + ".json", outputJson);
-
+        // Construct log JSON file
+        string logJson = parser.constructLogJson(logData);
+        // Construct statistics JSON file
+        string statsJson = parser.constructStatisticsJson(sessionIds, durations, averageDuration);
+        // Output to .json file
+        parser.outputToFile(logJson, testFile + ".json");
+        parser.outputToFile(statsJson, "testdata\\statistics.json");
 		//-------------------------------------------------------------------------------------------------------
 		// How long did it take?...   DO NOT CHANGE FROM HERE...
 		

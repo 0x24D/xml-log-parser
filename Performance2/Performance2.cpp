@@ -9,12 +9,17 @@
 #include <cmath>
 #include <ctime>
 #include <fstream>
+#include <functional>
+#include <future>
 #include <iomanip>  
 #include <iostream>
 #include <istream>
 #include <numeric>
+#include <queue>
+#include "rcu_ptr.cpp"
 #include <sstream>
 #include <string>
+#include <thread>
 #include <tuple>
 #include <utility>
 #include <vector>
@@ -121,6 +126,7 @@ struct LogItem {
     vector<string> paths;
     vector<string> times;
 };
+boolean logsRead(false);
 
 class XMLParser {
 public:
@@ -162,6 +168,25 @@ public:
         item.times = times;
         return item;
     }
+    pair<string, vector<string>> parseDurationLine(const string& line) {
+        auto sessionStartTagBegin = line.find(sessionStartTag);
+        auto sessionEndTagBegin = line.find(sessionEndTag);
+        auto sessionIdBegin = sessionStartTagBegin + sessionStartTag.length();
+        string sessionId(line, sessionIdBegin, sessionEndTagBegin - sessionIdBegin);
+        vector<string> times;
+        size_t pos = 0;
+        auto pathStartTagBegin = line.find(pathStartTag);
+        while (pathStartTagBegin != string::npos) {
+            auto timeStartTagBegin = line.find(timeStartTag, pos);
+            auto timeEndTagBegin = line.find(timeEndTag, pos);
+            auto timeBegin = timeStartTagBegin + timeStartTag.length();
+            string time(line, timeBegin, timeEndTagBegin - timeBegin);
+            times.push_back(time);
+            pos = timeEndTagBegin + timeEndTag.length();
+            pathStartTagBegin = line.find(pathStartTag, pos);
+        }
+        return { sessionId, times };
+    }
     float calculateAverageDuration(vector<float> durations) {
         auto totalDuration = accumulate(durations.begin(), durations.end(), 0.0);
         return totalDuration / durations.size();
@@ -185,6 +210,13 @@ public:
             }
         }
         return { sessionIds, durations };
+    }
+    string parseIpAddress(const string& line) {
+        auto ipStartTagBegin = line.find(ipStartTag);
+        auto ipEndTagBegin = line.find(ipEndTag);
+        auto ipAddressBegin = ipStartTagBegin + ipStartTag.length();
+        string ipAddress(line, ipAddressBegin, ipEndTagBegin - ipAddressBegin);
+        return ipAddress;
     }
     string constructLogJson(const vector<LogItem>& logData) {
         auto logDataSize = logData.size();
@@ -252,6 +284,73 @@ private:
     const string timeEndTag = "</time>";
 };
 
+static XMLParser parser;
+
+vector<LogItem> parseLogs(rcu_ptr<queue<string>>& q) {
+    vector<LogItem> logData;
+    std::shared_ptr<const std::queue<string>> local_copy = q.read();
+    while (!logsRead || !local_copy->empty()) {
+        while (!local_copy->empty()) {
+            //
+            logData.push_back(parser.parseLogLine(local_copy->front()));
+            //
+            q.copy_update([](std::queue<string> *copy) {
+                copy->pop();
+            });
+            local_copy = q.read();
+        }
+        local_copy = q.read();
+    }
+    return logData;
+};
+
+pair<vector<string>, vector<vector<string>>> parseDurations(rcu_ptr<queue<string>>& q) {
+    vector<string> sessionIds;
+    vector<vector<string>> allDurations;
+    std::shared_ptr<const std::queue<string>> local_copy = q.read();
+    while (!logsRead || !local_copy->empty()) {
+        while (!local_copy->empty()) {
+            //
+            string sessionId;
+            vector<string> durations;
+            tie(sessionId, durations) = parser.parseDurationLine(local_copy->front());
+            sessionIds.push_back(sessionId);
+            allDurations.push_back(durations);
+            //
+            q.copy_update([](std::queue<string> *copy) {
+                copy->pop();
+            });
+            local_copy = q.read();
+        }
+        local_copy = q.read();
+    }
+    return { sessionIds, allDurations };
+}
+
+int parseMultipleViews(rcu_ptr<queue<string>>& q) {
+    int numberOfViews = 0;
+    vector<string> ipAddresses;
+    std::shared_ptr<const std::queue<string>> local_copy = q.read();
+    while (!logsRead || !local_copy->empty()) {
+        while (!local_copy->empty()) {
+            //
+            string ipAddress = parser.parseIpAddress(local_copy->front());
+            if (find(ipAddresses.begin(), ipAddresses.end(), ipAddress) == ipAddresses.end()) {
+                ipAddresses.push_back(ipAddress);
+            } else {
+                ++numberOfViews;
+            }
+            //
+            q.copy_update([](std::queue<string> *copy) {
+                copy->pop();
+            });
+            local_copy = q.read();
+        }
+        local_copy = q.read();
+    }
+    return numberOfViews;
+}
+
 int _tmain(int argc, TCHAR* argv[], TCHAR* envp[])
 {
 	int nRetCode = 0;
@@ -277,25 +376,23 @@ int _tmain(int argc, TCHAR* argv[], TCHAR* envp[])
         const string testFile = "testdata\\2";
         ifstream xmlFile(testFile + ".xml");
         string line;
-        vector<LogItem> logData;
+        rcu_ptr<queue<string>> logLines = make_shared<queue<string>>();
+
+        future<vector<LogItem>> f1 = async(parseLogs, ref(logLines));
+        future<pair<vector<string>, vector<vector<string>>>> f2 = async(parseDurations, ref(logLines));
+        future<int> f3 = async(parseMultipleViews, ref(logLines));
         // Parse XML file
         while (getline(xmlFile, line)) {
-            logData.push_back(parser.parseLogLine(line));
+            logLines.copy_update([line](queue<string> *copy) { copy->push(line); });
         }
+        logsRead = true;
         xmlFile.close();
-        // Calculate time per session
+
+        vector<LogItem> logData = f1.get();
         vector<string> sessionIds;
-        vector<float> durations; 
-        tie(sessionIds, durations) = parser.calculateDurations(logData);
-        // Calculate average session time
-        float averageDuration = parser.calculateAverageDuration(durations);
-        // Construct log JSON file
-        string logJson = parser.constructLogJson(logData);
-        // Construct statistics JSON file
-        string statsJson = parser.constructStatisticsJson(sessionIds, durations, averageDuration);
-        // Output to .json file
-        parser.outputToFile(logJson, testFile + ".json");
-        parser.outputToFile(statsJson, "testdata\\statistics.json");
+        vector<vector<string>> durations;
+        tie(sessionIds, durations) = f2.get();
+        int numberOfMultipleViews = f3.get();
 		//-------------------------------------------------------------------------------------------------------
 		// How long did it take?...   DO NOT CHANGE FROM HERE...
 		

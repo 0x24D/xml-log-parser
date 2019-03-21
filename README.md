@@ -60,14 +60,15 @@ times: std::vector<string>>
 
 ## Multithreading
 * Single-threaded:
-  * Read from log.xml (T0)
+  * Read from log.xml
 * Parallel:
-  * Parse to LogData struct (T1)
-  * Calculate duration of each session (T2)
-  * Calculate total number of views from same IP addresses (T3)
-* After duration thread has finished:
-  * Calculate average duration (T2)
-* After all finished:
+  * Parse to LogData struct (F1)
+  * Parse ID and times of each session (F2)
+  * Calculate total number of views from same IP addresses (F3)
+* After F2 has finished:
+  * Calculate durations (F4)
+  * Calculate average duration (F5)
+* After F1, F3, F4, F5 have finished:
   * Parallel: 
-    * Output to log JSON file (T1)
-    * Output to statistics JSON file (T2)
+    * Output to log JSON file (F6)
+    * Output to statistics JSON file (F7)

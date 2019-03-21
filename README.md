@@ -13,6 +13,7 @@
   * The average time users spend on the site. (implemented - single threaded)
   * The number of times users with the same IP address visit the site.
 
+## Structure
 ```
 // log.json
 {
@@ -56,3 +57,17 @@ times: std::vector<string>>
   "duplicate_views": $duplicate_views
 }
 ```
+
+## Multithreading
+* Single-threaded:
+  * Read from log.xml (T0)
+* Parallel:
+  * Parse to LogData struct (T1)
+  * Calculate duration of each session (T2)
+  * Calculate total number of views from same IP addresses (T3)
+* After duration thread has finished:
+  * Calculate average duration (T2)
+* After all finished:
+  * Parallel: 
+    * Output to log JSON file (T1)
+    * Output to statistics JSON file (T2)

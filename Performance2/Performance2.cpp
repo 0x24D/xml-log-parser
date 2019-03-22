@@ -8,6 +8,7 @@
 #include <array>
 #include <cmath>
 #include <ctime>
+#include "FFQ.cpp"
 #include <fstream>
 #include <functional>
 #include <future>
@@ -16,7 +17,6 @@
 #include <istream>
 #include <numeric>
 #include <queue>
-#include "rcu_ptr.cpp"
 #include <sstream>
 #include <string>
 #include <thread>
@@ -286,70 +286,67 @@ private:
 
 static XMLParser parser;
 
-vector<LogItem> parseLogs(rcu_ptr<queue<string>>& q) {
+vector<LogItem> parseLogs(FFQ<array, string, 10>& v) {
     vector<LogItem> logData;
-    std::shared_ptr<const std::queue<string>> local_copy = q.read();
-    while (!logsRead || !local_copy->empty()) {
-        while (!local_copy->empty()) {
+    string line = v.FFQ_DEQ();
+    while (!logsRead) {
+        while (!line.empty()) {
             //
-            logData.push_back(parser.parseLogLine(local_copy->front()));
+            logData.push_back(parser.parseLogLine(line));
             //
-            q.copy_update([](std::queue<string> *copy) {
-                copy->pop();
-            });
-            local_copy = q.read();
+            line = v.FFQ_DEQ();
         }
-        local_copy = q.read();
+        line = v.FFQ_DEQ();
     }
     return logData;
 };
 
-pair<vector<string>, vector<vector<string>>> parseDurations(rcu_ptr<queue<string>>& q) {
-    vector<string> sessionIds;
-    vector<vector<string>> allDurations;
-    std::shared_ptr<const std::queue<string>> local_copy = q.read();
-    while (!logsRead || !local_copy->empty()) {
-        while (!local_copy->empty()) {
-            //
-            string sessionId;
-            vector<string> durations;
-            tie(sessionId, durations) = parser.parseDurationLine(local_copy->front());
-            sessionIds.push_back(sessionId);
-            allDurations.push_back(durations);
-            //
-            q.copy_update([](std::queue<string> *copy) {
-                copy->pop();
-            });
-            local_copy = q.read();
-        }
-        local_copy = q.read();
-    }
-    return { sessionIds, allDurations };
-}
+//pair<vector<string>, vector<vector<string>>> parseDurations(rcu_ptr<queue<string>>& q) {
+//    vector<string> sessionIds;
+//    vector<vector<string>> allDurations;
+//    std::shared_ptr<const std::queue<string>> local_copy = q.read();
+//    while (!logsRead || !local_copy->empty()) {
+//        while (!local_copy->empty()) {
+//            //
+//            string sessionId;
+//            vector<string> durations;
+//            tie(sessionId, durations) = parser.parseDurationLine(local_copy->front());
+//            sessionIds.push_back(sessionId);
+//            allDurations.push_back(durations);
+//            //
+//            q.copy_update([](std::queue<string> *copy) {
+//                copy->pop();
+//            });
+//            local_copy = q.read();
+//        }
+//        local_copy = q.read();
+//    }
+//    return { sessionIds, allDurations };
+//}
 
-int parseMultipleViews(rcu_ptr<queue<string>>& q) {
-    int numberOfViews = 0;
-    vector<string> ipAddresses;
-    std::shared_ptr<const std::queue<string>> local_copy = q.read();
-    while (!logsRead || !local_copy->empty()) {
-        while (!local_copy->empty()) {
-            //
-            string ipAddress = parser.parseIpAddress(local_copy->front());
-            if (find(ipAddresses.begin(), ipAddresses.end(), ipAddress) == ipAddresses.end()) {
-                ipAddresses.push_back(ipAddress);
-            } else {
-                ++numberOfViews;
-            }
-            //
-            q.copy_update([](std::queue<string> *copy) {
-                copy->pop();
-            });
-            local_copy = q.read();
-        }
-        local_copy = q.read();
-    }
-    return numberOfViews;
-}
+//int parseMultipleViews(rcu_ptr<queue<string>>& q) {
+//    int numberOfViews = 0;
+//    vector<string> ipAddresses;
+//    std::shared_ptr<const std::queue<string>> local_copy = q.read();
+//    while (!logsRead || !local_copy->empty()) {
+//        while (!local_copy->empty()) {
+//            //
+//            string ipAddress = parser.parseIpAddress(local_copy->front());
+//            if (find(ipAddresses.begin(), ipAddresses.end(), ipAddress) == ipAddresses.end()) {
+//                ipAddresses.push_back(ipAddress);
+//            } else {
+//                ++numberOfViews;
+//            }
+//            //
+//            q.copy_update([](std::queue<string> *copy) {
+//                copy->pop();
+//            });
+//            local_copy = q.read();
+//        }
+//        local_copy = q.read();
+//    }
+//    return numberOfViews;
+//}
 
 int _tmain(int argc, TCHAR* argv[], TCHAR* envp[])
 {
@@ -376,23 +373,23 @@ int _tmain(int argc, TCHAR* argv[], TCHAR* envp[])
         const string testFile = "testdata\\2";
         ifstream xmlFile(testFile + ".xml");
         string line;
-        rcu_ptr<queue<string>> logLines = make_shared<queue<string>>();
+        FFQ<array, string, 10> logLines;
 
         future<vector<LogItem>> f1 = async(parseLogs, ref(logLines));
-        future<pair<vector<string>, vector<vector<string>>>> f2 = async(parseDurations, ref(logLines));
-        future<int> f3 = async(parseMultipleViews, ref(logLines));
+        /*future<pair<vector<string>, vector<vector<string>>>> f2 = async(parseDurations, ref(logLines));
+        future<int> f3 = async(parseMultipleViews, ref(logLines));*/
         // Parse XML file
         while (getline(xmlFile, line)) {
-            logLines.copy_update([line](queue<string> *copy) { copy->push(line); });
+            logLines.FFQ_ENQ(line);
         }
         logsRead = true;
         xmlFile.close();
 
         vector<LogItem> logData = f1.get();
-        vector<string> sessionIds;
+        /*vector<string> sessionIds;
         vector<vector<string>> durations;
         tie(sessionIds, durations) = f2.get();
-        int numberOfMultipleViews = f3.get();
+        int numberOfMultipleViews = f3.get();*/
 		//-------------------------------------------------------------------------------------------------------
 		// How long did it take?...   DO NOT CHANGE FROM HERE...
 		

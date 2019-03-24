@@ -381,3 +381,4 @@ healthchecksdb
 
 log.xml
 Performance2/testdata/*.json
+Performance2/testdata/100000.xml

@@ -126,76 +126,8 @@ struct LogItem {
     vector<string> paths;
     vector<string> times;
 };
+
 boolean logsRead(false);
-
-class XMLParser {
-public:
-    string constructLogJson(const vector<LogItem>& logData) {
-        auto logDataSize = logData.size();
-        string outputJSON = "{\n";
-        for (decltype(logDataSize) i = 0; i < logDataSize; ++i) {
-            outputJSON += "  \"entries\": [\n    {\n";
-            outputJSON += "      \"session_id\": \"" + logData[i].sessionId + "\",\n";
-            outputJSON += "      \"ip_address\": \"" + logData[i].ipAddress + "\",\n";
-            outputJSON += "      \"browser\": \"" + logData[i].browser + "\",\n";
-            outputJSON += "      \"page_views\": [\n";
-            auto pathsSize = logData[i].paths.size();
-            for (decltype(pathsSize) j = 0; j < pathsSize; ++j) {
-                outputJSON += "        {\n";
-                outputJSON += "          \"path\": \"" + logData[i].paths[j] + "\",\n";
-                outputJSON += "          \"time\": \"" + logData[i].times[j] + "\"\n";
-                outputJSON += "        }";
-                if (j != pathsSize - 1) {
-                    outputJSON += ",";
-                }
-                outputJSON += "\n";
-            }
-            outputJSON += "      ]\n    }\n  ]";
-            if (i != logDataSize - 1) {
-                outputJSON += ",";
-            }
-            outputJSON += "\n";
-        }
-        outputJSON += "}";
-        return outputJSON;
-    }
-     string constructStatisticsJson(const vector<string>& sessionIds, const vector<float>& durations, const float& averageDuration) {
-         auto sessionsSize = sessionIds.size();
-        string outputJSON = "{\n";
-        outputJSON += "  \"time_durations\": [\n";
-        for (decltype(sessionsSize) i = 0; i < sessionsSize; ++i) {
-            outputJSON += "    {\n";
-            outputJSON += "      \"session_id\": \"" + sessionIds[i] + "\",\n";
-            outputJSON += "      \"duration\": " + to_string(durations[i]) + "\n";
-            outputJSON += "    }";
-            if (i != sessionsSize - 1) {
-                outputJSON += ",";
-            }
-            outputJSON += "\n";
-        }
-        outputJSON += "  ],\n";
-        outputJSON += "  \"average_duration\": " + to_string(averageDuration) + "\n";
-        outputJSON += "}";
-        return outputJSON;
-    }
-    void outputToFile(const string& json, const string& fileName) {
-        ofstream jsonFile(fileName);
-        jsonFile << json;
-        jsonFile.close();
-    }
-private:
-    const string sessionStartTag = "<sessionid>";
-    const string sessionEndTag = "</sessionid>";
-    const string ipStartTag = "<ipaddress>";
-    const string ipEndTag = "</ipaddress>";
-    const string browserStartTag = "<browser>";
-    const string browserEndTag = "</browser>";
-    const string pathStartTag = "<path>";
-    const string pathEndTag = "</path>";
-    const string timeStartTag = "<time>";
-    const string timeEndTag = "</time>";
-};
-
 
 const string sessionStartTag = "<sessionid>";
 const string sessionEndTag = "</sessionid>";
@@ -345,6 +277,63 @@ float calculateAverageDuration(const vector<pair<string, vector<string>>>& sessi
     return totalDuration / durations.size();
 }
 
+string constructLogJson(const vector<LogItem>& logData) {
+    auto logDataSize = logData.size();
+    string outputJSON = "{\n";
+    for (decltype(logDataSize) i = 0; i < logDataSize; ++i) {
+        outputJSON += "  \"entries\": [\n    {\n";
+        outputJSON += "      \"session_id\": \"" + logData[i].sessionId + "\",\n";
+        outputJSON += "      \"ip_address\": \"" + logData[i].ipAddress + "\",\n";
+        outputJSON += "      \"browser\": \"" + logData[i].browser + "\",\n";
+        outputJSON += "      \"page_views\": [\n";
+        auto pathsSize = logData[i].paths.size();
+        for (decltype(pathsSize) j = 0; j < pathsSize; ++j) {
+            outputJSON += "        {\n";
+            outputJSON += "          \"path\": \"" + logData[i].paths[j] + "\",\n";
+            outputJSON += "          \"time\": \"" + logData[i].times[j] + "\"\n";
+            outputJSON += "        }";
+            if (j != pathsSize - 1) {
+                outputJSON += ",";
+            }
+            outputJSON += "\n";
+        }
+        outputJSON += "      ]\n    }\n  ]";
+        if (i != logDataSize - 1) {
+            outputJSON += ",";
+        }
+        outputJSON += "\n";
+    }
+    outputJSON += "}";
+    return outputJSON;
+}
+
+string constructStatisticsJson(const vector<pair<string, float>>& sessions, const float& averageDuration, const int& views) {
+    auto sessionsSize = sessions.size();
+    string outputJSON = "{\n";
+    outputJSON += "  \"time_durations\": [\n";
+    for (decltype(sessionsSize) i = 0; i < sessionsSize; ++i) {
+        outputJSON += "    {\n";
+        outputJSON += "      \"session_id\": \"" + sessions[i].first + "\",\n";
+        outputJSON += "      \"duration\": " + to_string(sessions[i].second) + "\n";
+        outputJSON += "    }";
+        if (i != sessionsSize - 1) {
+            outputJSON += ",";
+        }
+        outputJSON += "\n";
+    }
+    outputJSON += "  ],\n";
+    outputJSON += "  \"average_duration\": " + to_string(averageDuration) + ",\n";
+    outputJSON += "  \"duplicate_views\": " + to_string(views) + "\n";
+    outputJSON += "}";
+    return outputJSON;
+}
+
+void outputToFile(const string& json, const string& fileName) {
+    ofstream jsonFile(fileName);
+    jsonFile << json;
+    jsonFile.close();
+}
+
 int _tmain(int argc, TCHAR* argv[], TCHAR* envp[])
 {
 	int nRetCode = 0;
@@ -389,9 +378,23 @@ int _tmain(int argc, TCHAR* argv[], TCHAR* envp[])
 
         future<vector<pair<string, float>>> f4 = async(calculateDurations, ref(sessionTimes));
         future<float> f5 = async(calculateAverageDuration, ref(sessionTimes));
+
+        vector<LogItem> logData = f1.get();
+        int views = f3.get();
         vector<pair<string, float>> sessionDurations = f4.get();
         float averageDuration = f5.get();
-		//-------------------------------------------------------------------------------------------------------
+
+        future<string> f6 = async(constructLogJson, ref(logData));
+        future<string> f7 = async(constructStatisticsJson, ref(sessionDurations), ref(averageDuration), ref(views));
+
+        string logJson = f6.get();
+        future<void> f8 = async(outputToFile, ref(logJson), testFile + ".json");
+        string statsJson = f7.get();
+        future<void> f9 = async(outputToFile, ref(statsJson), "testdata\\statistics.json");
+
+        f8.get();
+        f9.get();
+        //-------------------------------------------------------------------------------------------------------
 		// How long did it take?...   DO NOT CHANGE FROM HERE...
 		TIMER end;
 

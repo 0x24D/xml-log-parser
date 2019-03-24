@@ -130,39 +130,6 @@ boolean logsRead(false);
 
 class XMLParser {
 public:
-   
-   
-    float calculateAverageDuration(vector<float> durations) {
-        auto totalDuration = accumulate(durations.begin(), durations.end(), 0.0);
-        return totalDuration / durations.size();
-    }
-    pair<vector<string>, vector<float>> calculateDurations(const vector<LogItem>& logData) {
-        vector<string> sessionIds;
-        vector<float> durations;
-        for (LogItem item : logData) {
-            sessionIds.push_back(item.sessionId);
-            if (item.times.size() == 1) {
-                durations.push_back(0.0f);
-            } else {
-                struct tm latestDateTm;
-                istringstream(item.times[item.times.size() - 1]) >> std::get_time(&latestDateTm, "%d/%m/%Y %H:%M:%S");
-
-                struct tm oldestDateTm;
-                istringstream(item.times[0]) >> std::get_time(&oldestDateTm, "%d/%m/%Y %H:%M:%S");
-
-                float differenceInSeconds = difftime(mktime(&latestDateTm), mktime(&oldestDateTm));
-                durations.push_back(differenceInSeconds);
-            }
-        }
-        return { sessionIds, durations };
-    }
-    string parseIpAddress(const string& line) {
-        auto ipStartTagBegin = line.find(ipStartTag);
-        auto ipEndTagBegin = line.find(ipEndTag);
-        auto ipAddressBegin = ipStartTagBegin + ipStartTag.length();
-        string ipAddress(line, ipAddressBegin, ipEndTagBegin - ipAddressBegin);
-        return ipAddress;
-    }
     string constructLogJson(const vector<LogItem>& logData) {
         auto logDataSize = logData.size();
         string outputJSON = "{\n";
@@ -333,6 +300,51 @@ int calculateNumberOfViews(circular_buffer<string>& b) {
     return numberOfDuplicateViews;
 }
 
+vector<pair<string, float>> calculateDurations(const vector<pair<string, vector<string>>>& sessionTimes) {
+    vector<pair<string, float>> durations;
+    for (pair<string, vector<string>> pair : sessionTimes) {
+        float duration;
+        if (pair.second.size() == 1) {
+            duration = 0.0f;
+        }
+        else {
+            struct tm latestDateTm;
+            istringstream(pair.second[pair.second.size() - 1]) >> std::get_time(&latestDateTm, "%d/%m/%Y %H:%M:%S");
+
+            struct tm oldestDateTm;
+            istringstream(pair.second[0]) >> std::get_time(&oldestDateTm, "%d/%m/%Y %H:%M:%S");
+
+            float differenceInSeconds = difftime(mktime(&latestDateTm), mktime(&oldestDateTm));
+            duration = differenceInSeconds;
+        }
+        durations.push_back({ pair.first, duration });
+    }
+    return durations;
+}
+
+float calculateAverageDuration(const vector<pair<string, vector<string>>>& sessionTimes) {
+    vector<float> durations;
+    for (pair<string, vector<string>> pair : sessionTimes) {
+        float duration;
+        if (pair.second.size() == 1) {
+            duration = 0.0f;
+        }
+        else {
+            struct tm latestDateTm;
+            istringstream(pair.second[pair.second.size() - 1]) >> std::get_time(&latestDateTm, "%d/%m/%Y %H:%M:%S");
+
+            struct tm oldestDateTm;
+            istringstream(pair.second[0]) >> std::get_time(&oldestDateTm, "%d/%m/%Y %H:%M:%S");
+
+            float differenceInSeconds = difftime(mktime(&latestDateTm), mktime(&oldestDateTm));
+            duration = differenceInSeconds;
+        }
+        durations.push_back(duration);
+    }
+    auto totalDuration = accumulate(durations.begin(), durations.end(), 0.0);
+    return totalDuration / durations.size();
+}
+
 int _tmain(int argc, TCHAR* argv[], TCHAR* envp[])
 {
 	int nRetCode = 0;
@@ -374,6 +386,11 @@ int _tmain(int argc, TCHAR* argv[], TCHAR* envp[])
         xmlFile.close();
 
         vector<pair<string, vector<string>>> sessionTimes = f2.get();
+
+        future<vector<pair<string, float>>> f4 = async(calculateDurations, ref(sessionTimes));
+        future<float> f5 = async(calculateAverageDuration, ref(sessionTimes));
+        vector<pair<string, float>> sessionDurations = f4.get();
+        float averageDuration = f5.get();
 		//-------------------------------------------------------------------------------------------------------
 		// How long did it take?...   DO NOT CHANGE FROM HERE...
 		TIMER end;

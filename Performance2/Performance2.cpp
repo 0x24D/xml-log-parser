@@ -286,9 +286,8 @@ vector<LogItem> parseLogLines(circular_buffer<string>& b) {
     }
     return logData;
 }
-pair<vector<string>, vector<vector<string>>> parseDurationLines(circular_buffer<string>& b) {
-    vector<string> sessionIds;
-    vector<vector<string>> allTimes;
+vector<pair<string, vector<string>>> parseDurationLines(circular_buffer<string>& b) {
+    vector<pair<string, vector<string>>> pairs;
     while (!logsRead || !b.empty()) {
         if (!b.empty()) {
             string line = b.get();
@@ -308,11 +307,10 @@ pair<vector<string>, vector<vector<string>>> parseDurationLines(circular_buffer<
                 pos = timeEndTagBegin + timeEndTag.length();
                 pathStartTagBegin = line.find(pathStartTag, pos);
             }
-            sessionIds.push_back(sessionId);
-            allTimes.push_back(times);
+            pairs.push_back({ sessionId, times });
         }
     }
-    return { sessionIds, allTimes };
+    return pairs;
 }
 
 int _tmain(int argc, TCHAR* argv[], TCHAR* envp[])
@@ -334,8 +332,6 @@ int _tmain(int argc, TCHAR* argv[], TCHAR* envp[])
 
 		//--------------------------------------------------------------------------------------
 		// Insert your code from here...
-        
-        XMLParser parser;
 
         const string testFile = "testdata\\2";
         ifstream xmlFile(testFile + ".xml");
@@ -343,7 +339,7 @@ int _tmain(int argc, TCHAR* argv[], TCHAR* envp[])
         circular_buffer<string> logLines(10);
         circular_buffer<string> durationLines(10);
         future<vector<LogItem>> f1 = async(parseLogLines, ref(logLines));
-        future<pair<vector<string>, vector<vector<string>>>> f2 = async(parseDurationLines, ref(durationLines));
+        future<vector<pair<string, vector<string>>>> f2 = async(parseDurationLines, ref(durationLines));
         // Parse XML file
         while (getline(xmlFile, line)) {
             {
@@ -354,9 +350,7 @@ int _tmain(int argc, TCHAR* argv[], TCHAR* envp[])
         logsRead = true;
         xmlFile.close();
 
-        vector<string> sessionIds;
-        vector<vector<string>> times;
-        tie(sessionIds, times) = f2.get();
+        vector<pair<string, vector<string>>> sessionTimes = f2.get();
 
 		//-------------------------------------------------------------------------------------------------------
 		// How long did it take?...   DO NOT CHANGE FROM HERE...

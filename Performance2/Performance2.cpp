@@ -6,9 +6,9 @@
 
 #include <algorithm>
 #include <array>
+#include "circular_buffer.cpp"
 #include <cmath>
 #include <ctime>
-#include "FFQ.cpp"
 #include <fstream>
 #include <functional>
 #include <future>
@@ -130,63 +130,8 @@ boolean logsRead(false);
 
 class XMLParser {
 public:
-    LogItem parseLogLine(const string& line) {
-        LogItem item;
-        auto sessionStartTagBegin = line.find(sessionStartTag);
-        auto sessionEndTagBegin = line.find(sessionEndTag);
-        auto sessionIdBegin = sessionStartTagBegin + sessionStartTag.length();
-        string sessionId(line, sessionIdBegin, sessionEndTagBegin - sessionIdBegin);
-        item.sessionId = sessionId;
-        auto ipStartTagBegin = line.find(ipStartTag);
-        auto ipEndTagBegin = line.find(ipEndTag);
-        auto ipAddressBegin = ipStartTagBegin + ipStartTag.length();
-        string ipAddress(line, ipAddressBegin, ipEndTagBegin - ipAddressBegin);
-        item.ipAddress = ipAddress;
-        auto browserStartTagBegin = line.find(browserStartTag);
-        auto browserEndTagBegin = line.find(browserEndTag);
-        auto browserBegin = browserStartTagBegin + browserStartTag.length();
-        string browser(line, browserBegin, browserEndTagBegin - browserBegin);
-        item.browser = browser;
-        size_t pos = 0;
-        auto pathStartTagBegin = line.find(pathStartTag);
-        vector<string> paths;
-        vector<string> times;
-        while (pathStartTagBegin != string::npos) {
-            auto pathEndTagBegin = line.find(pathEndTag, pos);
-            auto pathBegin = pathStartTagBegin + pathStartTag.length();
-            string path(line, pathBegin, pathEndTagBegin - pathBegin);
-            paths.push_back(path);
-            auto timeStartTagBegin = line.find(timeStartTag, pos);
-            auto timeEndTagBegin = line.find(timeEndTag, pos);
-            auto timeBegin = timeStartTagBegin + timeStartTag.length();
-            string time(line, timeBegin, timeEndTagBegin - timeBegin);
-            times.push_back(time);
-            pos = timeEndTagBegin + timeEndTag.length();
-            pathStartTagBegin = line.find(pathStartTag, pos);
-        }
-        item.paths = paths;
-        item.times = times;
-        return item;
-    }
-    pair<string, vector<string>> parseDurationLine(const string& line) {
-        auto sessionStartTagBegin = line.find(sessionStartTag);
-        auto sessionEndTagBegin = line.find(sessionEndTag);
-        auto sessionIdBegin = sessionStartTagBegin + sessionStartTag.length();
-        string sessionId(line, sessionIdBegin, sessionEndTagBegin - sessionIdBegin);
-        vector<string> times;
-        size_t pos = 0;
-        auto pathStartTagBegin = line.find(pathStartTag);
-        while (pathStartTagBegin != string::npos) {
-            auto timeStartTagBegin = line.find(timeStartTag, pos);
-            auto timeEndTagBegin = line.find(timeEndTag, pos);
-            auto timeBegin = timeStartTagBegin + timeStartTag.length();
-            string time(line, timeBegin, timeEndTagBegin - timeBegin);
-            times.push_back(time);
-            pos = timeEndTagBegin + timeEndTag.length();
-            pathStartTagBegin = line.find(pathStartTag, pos);
-        }
-        return { sessionId, times };
-    }
+   
+   
     float calculateAverageDuration(vector<float> durations) {
         auto totalDuration = accumulate(durations.begin(), durations.end(), 0.0);
         return totalDuration / durations.size();
@@ -284,69 +229,91 @@ private:
     const string timeEndTag = "</time>";
 };
 
-static XMLParser parser;
 
-vector<LogItem> parseLogs(FFQ<array, string, 10>& v) {
+const string sessionStartTag = "<sessionid>";
+const string sessionEndTag = "</sessionid>";
+const string ipStartTag = "<ipaddress>";
+const string ipEndTag = "</ipaddress>";
+const string browserStartTag = "<browser>";
+const string browserEndTag = "</browser>";
+const string pathStartTag = "<path>";
+const string pathEndTag = "</path>";
+const string timeStartTag = "<time>";
+const string timeEndTag = "</time>";
+
+vector<LogItem> parseLogLines(circular_buffer<string>& b) {
     vector<LogItem> logData;
-    string line = v.FFQ_DEQ();
-    while (!logsRead) {
-        while (!line.empty()) {
-            //
-            logData.push_back(parser.parseLogLine(line));
-            //
-            line = v.FFQ_DEQ();
+    while (!logsRead || !b.empty()) {
+        if (!b.empty()) {
+            string line = b.get();
+            LogItem item;
+            auto sessionStartTagBegin = line.find(sessionStartTag);
+            auto sessionEndTagBegin = line.find(sessionEndTag);
+            auto sessionIdBegin = sessionStartTagBegin + sessionStartTag.length();
+            string sessionId(line, sessionIdBegin, sessionEndTagBegin - sessionIdBegin);
+            item.sessionId = sessionId;
+            auto ipStartTagBegin = line.find(ipStartTag);
+            auto ipEndTagBegin = line.find(ipEndTag);
+            auto ipAddressBegin = ipStartTagBegin + ipStartTag.length();
+            string ipAddress(line, ipAddressBegin, ipEndTagBegin - ipAddressBegin);
+            item.ipAddress = ipAddress;
+            auto browserStartTagBegin = line.find(browserStartTag);
+            auto browserEndTagBegin = line.find(browserEndTag);
+            auto browserBegin = browserStartTagBegin + browserStartTag.length();
+            string browser(line, browserBegin, browserEndTagBegin - browserBegin);
+            item.browser = browser;
+            size_t pos = 0;
+            auto pathStartTagBegin = line.find(pathStartTag);
+            vector<string> paths;
+            vector<string> times;
+            while (pathStartTagBegin != string::npos) {
+                auto pathEndTagBegin = line.find(pathEndTag, pos);
+                auto pathBegin = pathStartTagBegin + pathStartTag.length();
+                string path(line, pathBegin, pathEndTagBegin - pathBegin);
+                paths.push_back(path);
+                auto timeStartTagBegin = line.find(timeStartTag, pos);
+                auto timeEndTagBegin = line.find(timeEndTag, pos);
+                auto timeBegin = timeStartTagBegin + timeStartTag.length();
+                string time(line, timeBegin, timeEndTagBegin - timeBegin);
+                times.push_back(time);
+                pos = timeEndTagBegin + timeEndTag.length();
+                pathStartTagBegin = line.find(pathStartTag, pos);
+            }
+            item.paths = paths;
+            item.times = times;
+            logData.push_back(item);
         }
-        line = v.FFQ_DEQ();
     }
     return logData;
-};
-
-//pair<vector<string>, vector<vector<string>>> parseDurations(rcu_ptr<queue<string>>& q) {
-//    vector<string> sessionIds;
-//    vector<vector<string>> allDurations;
-//    std::shared_ptr<const std::queue<string>> local_copy = q.read();
-//    while (!logsRead || !local_copy->empty()) {
-//        while (!local_copy->empty()) {
-//            //
-//            string sessionId;
-//            vector<string> durations;
-//            tie(sessionId, durations) = parser.parseDurationLine(local_copy->front());
-//            sessionIds.push_back(sessionId);
-//            allDurations.push_back(durations);
-//            //
-//            q.copy_update([](std::queue<string> *copy) {
-//                copy->pop();
-//            });
-//            local_copy = q.read();
-//        }
-//        local_copy = q.read();
-//    }
-//    return { sessionIds, allDurations };
-//}
-
-//int parseMultipleViews(rcu_ptr<queue<string>>& q) {
-//    int numberOfViews = 0;
-//    vector<string> ipAddresses;
-//    std::shared_ptr<const std::queue<string>> local_copy = q.read();
-//    while (!logsRead || !local_copy->empty()) {
-//        while (!local_copy->empty()) {
-//            //
-//            string ipAddress = parser.parseIpAddress(local_copy->front());
-//            if (find(ipAddresses.begin(), ipAddresses.end(), ipAddress) == ipAddresses.end()) {
-//                ipAddresses.push_back(ipAddress);
-//            } else {
-//                ++numberOfViews;
-//            }
-//            //
-//            q.copy_update([](std::queue<string> *copy) {
-//                copy->pop();
-//            });
-//            local_copy = q.read();
-//        }
-//        local_copy = q.read();
-//    }
-//    return numberOfViews;
-//}
+}
+pair<vector<string>, vector<vector<string>>> parseDurationLines(circular_buffer<string>& b) {
+    vector<string> sessionIds;
+    vector<vector<string>> allTimes;
+    while (!logsRead || !b.empty()) {
+        if (!b.empty()) {
+            string line = b.get();
+            auto sessionStartTagBegin = line.find(sessionStartTag);
+            auto sessionEndTagBegin = line.find(sessionEndTag);
+            auto sessionIdBegin = sessionStartTagBegin + sessionStartTag.length();
+            string sessionId(line, sessionIdBegin, sessionEndTagBegin - sessionIdBegin);
+            vector<string> times;
+            size_t pos = 0;
+            auto pathStartTagBegin = line.find(pathStartTag);
+            while (pathStartTagBegin != string::npos) {
+                auto timeStartTagBegin = line.find(timeStartTag, pos);
+                auto timeEndTagBegin = line.find(timeEndTag, pos);
+                auto timeBegin = timeStartTagBegin + timeStartTag.length();
+                string time(line, timeBegin, timeEndTagBegin - timeBegin);
+                times.push_back(time);
+                pos = timeEndTagBegin + timeEndTag.length();
+                pathStartTagBegin = line.find(pathStartTag, pos);
+            }
+            sessionIds.push_back(sessionId);
+            allTimes.push_back(times);
+        }
+    }
+    return { sessionIds, allTimes };
+}
 
 int _tmain(int argc, TCHAR* argv[], TCHAR* envp[])
 {
@@ -373,26 +340,26 @@ int _tmain(int argc, TCHAR* argv[], TCHAR* envp[])
         const string testFile = "testdata\\2";
         ifstream xmlFile(testFile + ".xml");
         string line;
-        FFQ<array, string, 10> logLines;
-
-        future<vector<LogItem>> f1 = async(parseLogs, ref(logLines));
-        /*future<pair<vector<string>, vector<vector<string>>>> f2 = async(parseDurations, ref(logLines));
-        future<int> f3 = async(parseMultipleViews, ref(logLines));*/
+        circular_buffer<string> logLines(10);
+        circular_buffer<string> durationLines(10);
+        future<vector<LogItem>> f1 = async(parseLogLines, ref(logLines));
+        future<pair<vector<string>, vector<vector<string>>>> f2 = async(parseDurationLines, ref(durationLines));
         // Parse XML file
         while (getline(xmlFile, line)) {
-            logLines.FFQ_ENQ(line);
+            {
+                logLines.put(line);
+                durationLines.put(line);
+            }
         }
         logsRead = true;
         xmlFile.close();
 
-        vector<LogItem> logData = f1.get();
-        /*vector<string> sessionIds;
-        vector<vector<string>> durations;
-        tie(sessionIds, durations) = f2.get();
-        int numberOfMultipleViews = f3.get();*/
+        vector<string> sessionIds;
+        vector<vector<string>> times;
+        tie(sessionIds, times) = f2.get();
+
 		//-------------------------------------------------------------------------------------------------------
 		// How long did it take?...   DO NOT CHANGE FROM HERE...
-		
 		TIMER end;
 
 		TIMER elapsed;

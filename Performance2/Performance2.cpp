@@ -354,7 +354,7 @@ int _tmain(int argc, TCHAR* argv[], TCHAR* envp[])
 		//--------------------------------------------------------------------------------------
 		// Insert your code from here...
 
-        const string testFile = "testdata\\2";
+        const string testFile = "testdata\\100000";
         ifstream xmlFile(testFile + ".xml");
         string line;
         circular_buffer<string> logLines(10);
@@ -375,25 +375,34 @@ int _tmain(int argc, TCHAR* argv[], TCHAR* envp[])
         xmlFile.close();
 
         vector<pair<string, vector<string>>> sessionTimes = f2.get();
+        cout << "f2 complete\n";
 
         future<vector<pair<string, float>>> f4 = async(calculateDurations, ref(sessionTimes));
         future<float> f5 = async(calculateAverageDuration, ref(sessionTimes));
 
         vector<LogItem> logData = f1.get();
+        cout << "f1 complete\n";
         int views = f3.get();
+        cout << "f3 complete\n";
         vector<pair<string, float>> sessionDurations = f4.get();
+        cout << "f4 complete\n";
         float averageDuration = f5.get();
+        cout << "f5 complete\n";
 
         future<string> f6 = async(constructLogJson, ref(logData));
         future<string> f7 = async(constructStatisticsJson, ref(sessionDurations), ref(averageDuration), ref(views));
 
         string logJson = f6.get();
+        cout << "f6 complete\n";
         future<void> f8 = async(outputToFile, ref(logJson), testFile + ".json");
         string statsJson = f7.get();
-        future<void> f9 = async(outputToFile, ref(statsJson), "testdata\\statistics.json");
+        cout << "f7 complete\n";
+        future<void> f9 = async(outputToFile, ref(statsJson), "statistics.json");
 
         f8.get();
+        cout << "f8 complete\n";
         f9.get();
+        cout << "f9 complete\n";
         //-------------------------------------------------------------------------------------------------------
 		// How long did it take?...   DO NOT CHANGE FROM HERE...
 		TIMER end;

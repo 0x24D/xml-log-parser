@@ -69,6 +69,10 @@ times: std::vector<string>>
   * Calculate durations (F4)
   * Calculate average duration (F5)
 * After F1, F3, F4, F5 have finished:
+  * Parallel:
+    * Construct log JSON (F6)
+    * Construct statistics JSON (F7)
   * Parallel: 
-    * Output to log JSON file (F6)
-    * Output to statistics JSON file (F7)
+    * Output to log JSON file (F8)
+    * Output to statistics JSON file (F9)
+Current implementation takes 1 minute for 50000 lines and 9 minutes for 100000 lines

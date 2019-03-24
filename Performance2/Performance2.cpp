@@ -313,6 +313,26 @@ vector<pair<string, vector<string>>> parseDurationLines(circular_buffer<string>&
     return pairs;
 }
 
+int calculateNumberOfViews(circular_buffer<string>& b) {
+    vector<string> ipAddresses;
+    int numberOfDuplicateViews = 0;
+    while (!logsRead || !b.empty()) {
+        if (!b.empty()) {
+            string line = b.get();
+            auto ipStartTagBegin = line.find(ipStartTag);
+            auto ipEndTagBegin = line.find(ipEndTag);
+            auto ipAddressBegin = ipStartTagBegin + ipStartTag.length();
+            string ipAddress(line, ipAddressBegin, ipEndTagBegin - ipAddressBegin);
+            if (find(ipAddresses.begin(), ipAddresses.end(), ipAddress) == ipAddresses.end()) {
+                ipAddresses.push_back(ipAddress);
+            } else {
+                ++numberOfDuplicateViews;
+            }
+        }
+    }
+    return numberOfDuplicateViews;
+}
+
 int _tmain(int argc, TCHAR* argv[], TCHAR* envp[])
 {
 	int nRetCode = 0;
@@ -338,20 +358,22 @@ int _tmain(int argc, TCHAR* argv[], TCHAR* envp[])
         string line;
         circular_buffer<string> logLines(10);
         circular_buffer<string> durationLines(10);
+        circular_buffer<string> addressLines(10);
         future<vector<LogItem>> f1 = async(parseLogLines, ref(logLines));
         future<vector<pair<string, vector<string>>>> f2 = async(parseDurationLines, ref(durationLines));
+        future<int> f3 = async(calculateNumberOfViews, ref(addressLines));
         // Parse XML file
         while (getline(xmlFile, line)) {
             {
                 logLines.put(line);
                 durationLines.put(line);
+                addressLines.put(line);
             }
         }
         logsRead = true;
         xmlFile.close();
 
         vector<pair<string, vector<string>>> sessionTimes = f2.get();
-
 		//-------------------------------------------------------------------------------------------------------
 		// How long did it take?...   DO NOT CHANGE FROM HERE...
 		TIMER end;

@@ -54,7 +54,7 @@ times: std::vector<string>>
     }
   ],
   "average_duration": $average_duration,
-  "duplicate_views": $duplicate_views
+  "multiple_views": $multiple_views
 }
 ```
 

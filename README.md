@@ -75,4 +75,4 @@ times: std::vector<string>>
   * Parallel: 
     * Output to log JSON file (F8)
     * Output to statistics JSON file (F9)
-Current implementation takes 1 minute for 50000 lines and 9 minutes for 100000 lines
+Current implementation in release mode takes 193.3 seconds for log.xml

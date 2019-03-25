@@ -278,12 +278,13 @@ float calculateAverageDuration(const vector<pair<string, vector<string>>>& sessi
     return totalDuration / durations.size();
 }
 
-string constructLogJson(const vector<LogItem>& logData) {
+vector<string> constructLogJson(const vector<LogItem>& logData) {
     auto logDataSize = logData.size();
-    string outputJSON = "{\n  \"entries\": [\n";
+    vector<string> jsonData;
+    jsonData.push_back("{\n  \"entries\": [\n");
     int n = 0;
     for (decltype(logDataSize) i = 0; i < logDataSize; ++i) {
-        outputJSON += "    {\n";
+        string outputJSON = "    {\n";
         outputJSON += "      \"session_id\": \"" + logData[i].sessionId + "\",\n";
         outputJSON += "      \"ip_address\": \"" + logData[i].ipAddress + "\",\n";
         outputJSON += "      \"browser\": \"" + logData[i].browser + "\",\n";
@@ -306,17 +307,17 @@ string constructLogJson(const vector<LogItem>& logData) {
         outputJSON += "\n";
         ++n;
     }
-    outputJSON += "  ]\n}";
+    jsonData.push_back("  ]\n}");
     cout << "Constructed " << n << " JSON lines should be 1251777\n";
-    return outputJSON;
+    return jsonData;
 }
 
-string constructStatisticsJson(const vector<pair<string, float>>& sessions, const float& averageDuration, const int& views) {
+vector<string> constructStatisticsJson(const vector<pair<string, float>>& sessions, const float& averageDuration, const int& views) {
     auto sessionsSize = sessions.size();
-    string outputJSON = "{\n";
-    outputJSON += "  \"time_durations\": [\n";
+    vector<string> jsonData;
+    jsonData.push_back("{\n  \"time_durations\": [\n");
     for (decltype(sessionsSize) i = 0; i < sessionsSize; ++i) {
-        outputJSON += "    {\n";
+        string outputJSON = "    {\n";
         outputJSON += "      \"session_id\": \"" + sessions[i].first + "\",\n";
         outputJSON += "      \"duration\": " + to_string(sessions[i].second) + "\n";
         outputJSON += "    }";
@@ -324,17 +325,20 @@ string constructStatisticsJson(const vector<pair<string, float>>& sessions, cons
             outputJSON += ",";
         }
         outputJSON += "\n";
+        jsonData.push_back(outputJSON);
     }
-    outputJSON += "  ],\n";
-    outputJSON += "  \"average_duration\": " + to_string(averageDuration) + ",\n";
-    outputJSON += "  \"multiple_views\": " + to_string(views) + "\n";
-    outputJSON += "}";
-    return outputJSON;
+    jsonData.push_back("  ],\n");
+    jsonData.push_back("  \"average_duration\": " + to_string(averageDuration) + ",\n");
+    jsonData.push_back("  \"multiple_views\": " + to_string(views) + "\n");
+    jsonData.push_back("}");
+    return jsonData;
 }
 
-void outputToFile(const string& json, const string& fileName) {
+void outputToFile(const vector<string>& json, const string& fileName) {
     ofstream jsonFile(fileName);
-    jsonFile << json;
+    for (string s : json) {
+        jsonFile << s;
+    }
     jsonFile.close();
 }
 
@@ -361,9 +365,9 @@ int _tmain(int argc, TCHAR* argv[], TCHAR* envp[])
         const string testFile = "log";
         ifstream xmlFile(testFile + ".xml");
         string line;
-        circular_buffer<string> logLines(10);
-        circular_buffer<string> durationLines(10);
-        circular_buffer<string> addressLines(10);
+        circular_buffer<string> logLines(10000);
+        circular_buffer<string> durationLines(10000);
+        circular_buffer<string> addressLines(10000);
         future<vector<LogItem>> f1 = async(parseLogLines, ref(logLines));
         future<vector<pair<string, vector<string>>>> f2 = async(parseDurationLines, ref(durationLines));
         future<int> f3 = async(calculateNumberOfViews, ref(addressLines));
@@ -398,13 +402,12 @@ int _tmain(int argc, TCHAR* argv[], TCHAR* envp[])
         float averageDuration = f5.get();
         cout << "f5 complete\n";
 
-        future<string> f6 = async(constructLogJson, ref(logData));
-        future<string> f7 = async(constructStatisticsJson, ref(sessionDurations), ref(averageDuration), ref(views));
-
-        string logJson = f6.get();
+        future<vector<string>> f6 = async(constructLogJson, ref(logData));
+        future<vector<string>> f7 = async(constructStatisticsJson, ref(sessionDurations), ref(averageDuration), ref(views));
+        vector<string> logJson = f6.get();
         cout << "f6 complete\n";
         future<void> f8 = async(outputToFile, ref(logJson), testFile + ".json");
-        string statsJson = f7.get();
+        vector<string> statsJson = f7.get();
         cout << "f7 complete\n";
         future<void> f9 = async(outputToFile, ref(statsJson), testFile + "_statistics.json");
 

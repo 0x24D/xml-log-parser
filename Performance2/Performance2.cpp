@@ -5,24 +5,24 @@
 #include "Performance2.h"
 
 #include <algorithm>
-#include <array>
-#include "circular_buffer.cpp"
 #include <cmath>
+#include <concurrent_queue.h>
 #include <ctime>
+#include <deque>
 #include <fstream>
 #include <functional>
 #include <future>
 #include <iomanip>  
 #include <iostream>
 #include <istream>
+#include <iterator>
 #include <numeric>
-#include <queue>
+#include <ppl.h>
 #include <sstream>
 #include <string>
 #include <thread>
 #include <tuple>
 #include <utility>
-#include <vector>
 
 #ifdef _DEBUG
 #define new DEBUG_NEW
@@ -31,88 +31,88 @@
 // Timer - used to established precise timings for code.
 class TIMER
 {
-	LARGE_INTEGER t_;
+    LARGE_INTEGER t_;
 
-	__int64 current_time_;
+    __int64 current_time_;
 
-	public:
-		TIMER()	// Default constructor. Initialises this timer with the current value of the hi-res CPU timer.
-		{
-			QueryPerformanceCounter(&t_);
-			current_time_ = t_.QuadPart;
-		}
+public:
+    TIMER()	// Default constructor. Initialises this timer with the current value of the hi-res CPU timer.
+    {
+        QueryPerformanceCounter(&t_);
+        current_time_ = t_.QuadPart;
+    }
 
-		TIMER(const TIMER &ct)	// Copy constructor.
-		{
-			current_time_ = ct.current_time_;
-		}
+    TIMER(const TIMER &ct)	// Copy constructor.
+    {
+        current_time_ = ct.current_time_;
+    }
 
-		TIMER& operator=(const TIMER &ct)	// Copy assignment.
-		{
-			current_time_ = ct.current_time_;
-			return *this;
-		}
+    TIMER& operator=(const TIMER &ct)	// Copy assignment.
+    {
+        current_time_ = ct.current_time_;
+        return *this;
+    }
 
-		TIMER& operator=(const __int64 &n)	// Overloaded copy assignment.
-		{
-			current_time_ = n;
-			return *this;
-		}
+    TIMER& operator=(const __int64 &n)	// Overloaded copy assignment.
+    {
+        current_time_ = n;
+        return *this;
+    }
 
-		~TIMER() {}		// Destructor.
+    ~TIMER() {}		// Destructor.
 
-		static __int64 get_frequency()
-		{
-			LARGE_INTEGER frequency;
-			QueryPerformanceFrequency(&frequency); 
-			return frequency.QuadPart;
-		}
+    static __int64 get_frequency()
+    {
+        LARGE_INTEGER frequency;
+        QueryPerformanceFrequency(&frequency);
+        return frequency.QuadPart;
+    }
 
-		__int64 get_time() const
-		{
-			return current_time_;
-		}
+    __int64 get_time() const
+    {
+        return current_time_;
+    }
 
-		void get_current_time()
-		{
-			QueryPerformanceCounter(&t_);
-			current_time_ = t_.QuadPart;
-		}
+    void get_current_time()
+    {
+        QueryPerformanceCounter(&t_);
+        current_time_ = t_.QuadPart;
+    }
 
-		inline bool operator==(const TIMER &ct) const
-		{
-			return current_time_ == ct.current_time_;
-		}
+    inline bool operator==(const TIMER &ct) const
+    {
+        return current_time_ == ct.current_time_;
+    }
 
-		inline bool operator!=(const TIMER &ct) const
-		{
-			return current_time_ != ct.current_time_;
-		}
+    inline bool operator!=(const TIMER &ct) const
+    {
+        return current_time_ != ct.current_time_;
+    }
 
-		__int64 operator-(const TIMER &ct) const		// Subtract a TIMER from this one - return the result.
-		{
-			return current_time_ - ct.current_time_;
-		}
+    __int64 operator-(const TIMER &ct) const		// Subtract a TIMER from this one - return the result.
+    {
+        return current_time_ - ct.current_time_;
+    }
 
-		inline bool operator>(const TIMER &ct) const
-		{
-			return current_time_ > ct.current_time_;
-		}
+    inline bool operator>(const TIMER &ct) const
+    {
+        return current_time_ > ct.current_time_;
+    }
 
-		inline bool operator<(const TIMER &ct) const
-		{
-			return current_time_ < ct.current_time_;
-		}
+    inline bool operator<(const TIMER &ct) const
+    {
+        return current_time_ < ct.current_time_;
+    }
 
-		inline bool operator<=(const TIMER &ct) const
-		{
-			return current_time_ <= ct.current_time_;
-		}
+    inline bool operator<=(const TIMER &ct) const
+    {
+        return current_time_ <= ct.current_time_;
+    }
 
-		inline bool operator>=(const TIMER &ct) const
-		{
-			return current_time_ >= ct.current_time_;
-		}
+    inline bool operator>=(const TIMER &ct) const
+    {
+        return current_time_ >= ct.current_time_;
+    }
 };
 
 CWinApp theApp;  // The one and only application object
@@ -123,8 +123,7 @@ struct LogItem {
     string sessionId;
     string ipAddress;
     string browser;
-    vector<string> paths;
-    vector<string> times;
+    deque<pair<string, string>> pathTimes;
 };
 
 const string sessionStartTag = "<sessionid>";
@@ -138,304 +137,251 @@ const string pathEndTag = "</path>";
 const string timeStartTag = "<time>";
 const string timeEndTag = "</time>";
 
-vector<LogItem> parseLogLines(circular_buffer<string>& b) {
-    vector<LogItem> logData;
+void outputToFile(concurrency::concurrent_queue<string>& q, const string& fileName) {
+    ofstream jsonFile(fileName);
     while (true) {
-            string line = b.get();
-            if (!line.empty()) {
-                if (line == "NULL") { break; }
-                LogItem item;
-                auto sessionStartTagBegin = line.find(sessionStartTag);
-                auto sessionEndTagBegin = line.find(sessionEndTag);
-                auto sessionIdBegin = sessionStartTagBegin + sessionStartTag.length();
-                string sessionId(line, sessionIdBegin, sessionEndTagBegin - sessionIdBegin);
-                item.sessionId = sessionId;
-                auto ipStartTagBegin = line.find(ipStartTag);
-                auto ipEndTagBegin = line.find(ipEndTag);
-                auto ipAddressBegin = ipStartTagBegin + ipStartTag.length();
-                string ipAddress(line, ipAddressBegin, ipEndTagBegin - ipAddressBegin);
-                item.ipAddress = ipAddress;
-                auto browserStartTagBegin = line.find(browserStartTag);
-                auto browserEndTagBegin = line.find(browserEndTag);
-                auto browserBegin = browserStartTagBegin + browserStartTag.length();
-                string browser(line, browserBegin, browserEndTagBegin - browserBegin);
-                item.browser = browser;
-                size_t pos = 0;
-                auto pathStartTagBegin = line.find(pathStartTag);
-                vector<string> paths;
-                vector<string> times;
-                while (pathStartTagBegin != string::npos) {
-                    auto pathEndTagBegin = line.find(pathEndTag, pos);
-                    auto pathBegin = pathStartTagBegin + pathStartTag.length();
-                    string path(line, pathBegin, pathEndTagBegin - pathBegin);
-                    paths.push_back(path);
-                    auto timeStartTagBegin = line.find(timeStartTag, pos);
-                    auto timeEndTagBegin = line.find(timeEndTag, pos);
-                    auto timeBegin = timeStartTagBegin + timeStartTag.length();
-                    string time(line, timeBegin, timeEndTagBegin - timeBegin);
-                    times.push_back(time);
-                    pos = timeEndTagBegin + timeEndTag.length();
-                    pathStartTagBegin = line.find(pathStartTag, pos);
-                }
-                item.paths = paths;
-                item.times = times;
-                logData.push_back(item);
-            }
-    }
-    return logData;
-}
-vector<pair<string, vector<string>>> parseDurationLines(circular_buffer<string>& b) {
-    vector<pair<string, vector<string>>> pairs;
-    while (true) {
-        string line = b.get();
-        if (!line.empty()) {
+        string line;
+        auto popped = q.try_pop(line);
+        if (popped) {
             if (line == "NULL") { break; }
+            jsonFile << line;
+        }
+    }
+    jsonFile.close();
+}
+
+deque<LogItem> parseLogLines(concurrency::concurrent_queue<string>& q) {
+    deque<LogItem> logData;
+    while (true) {
+        string line;
+        auto popped = q.try_pop(line);
+        if (popped) {
+            if (line == "NULL") { break; }
+            LogItem item;
             auto sessionStartTagBegin = line.find(sessionStartTag);
             auto sessionEndTagBegin = line.find(sessionEndTag);
             auto sessionIdBegin = sessionStartTagBegin + sessionStartTag.length();
             string sessionId(line, sessionIdBegin, sessionEndTagBegin - sessionIdBegin);
-            vector<string> times;
-            size_t pos = 0;
-            auto pathStartTagBegin = line.find(pathStartTag);
-            while (pathStartTagBegin != string::npos) {
-                auto timeStartTagBegin = line.find(timeStartTag, pos);
-                auto timeEndTagBegin = line.find(timeEndTag, pos);
-                auto timeBegin = timeStartTagBegin + timeStartTag.length();
-                string time(line, timeBegin, timeEndTagBegin - timeBegin);
-                times.push_back(time);
-                pos = timeEndTagBegin + timeEndTag.length();
-                pathStartTagBegin = line.find(pathStartTag, pos);
-            }
-            pairs.push_back({ sessionId, times });
-        }
-    }
-    return pairs;
-}
-
-int calculateNumberOfViews(circular_buffer<string>& b) {
-    vector<string> ipAddresses;
-    int numberOfMultipleViews = 0;
-    while (true) {
-        string line = b.get();
-        if (!line.empty()) {
-            if (line == "NULL") { break; }
+            item.sessionId = sessionId;
             auto ipStartTagBegin = line.find(ipStartTag);
             auto ipEndTagBegin = line.find(ipEndTag);
             auto ipAddressBegin = ipStartTagBegin + ipStartTag.length();
             string ipAddress(line, ipAddressBegin, ipEndTagBegin - ipAddressBegin);
-            if (find(ipAddresses.begin(), ipAddresses.end(), ipAddress) == ipAddresses.end()) {
-                ipAddresses.push_back(ipAddress);
-            } else {
-                ++numberOfMultipleViews;
+            item.ipAddress = ipAddress;
+            auto browserStartTagBegin = line.find(browserStartTag);
+            auto browserEndTagBegin = line.find(browserEndTag);
+            auto browserBegin = browserStartTagBegin + browserStartTag.length();
+            string browser(line, browserBegin, browserEndTagBegin - browserBegin);
+            item.browser = browser;
+            size_t pos = 0;
+            auto pathStartTagBegin = line.find(pathStartTag);
+            deque<pair<string, string>> pathTimes;
+            while (pathStartTagBegin != string::npos) {
+                auto pathEndTagBegin = line.find(pathEndTag, pos);
+                auto pathBegin = pathStartTagBegin + pathStartTag.length();
+                string path(line, pathBegin, pathEndTagBegin - pathBegin);
+                auto timeStartTagBegin = line.find(timeStartTag, pos);
+                auto timeEndTagBegin = line.find(timeEndTag, pos);
+                auto timeBegin = timeStartTagBegin + timeStartTag.length();
+                string time(line, timeBegin, timeEndTagBegin - timeBegin);
+                pathTimes.push_back({ path, time });
+                pos = timeEndTagBegin + timeEndTag.length();
+                pathStartTagBegin = line.find(pathStartTag, pos);
             }
+            item.pathTimes = pathTimes;
+            logData.push_back(move(item));
+        }
+    }
+    return logData;
+}
+
+int calculateNumberOfViews(const deque<LogItem>& logData) {
+    deque<string> ipAddresses;
+    int numberOfMultipleViews = 0;
+    for (auto item : logData) {
+        if (find(ipAddresses.begin(), ipAddresses.end(), item.ipAddress) == ipAddresses.end()) {
+            ipAddresses.push_back(item.ipAddress);
+        }
+        else {
+            ++numberOfMultipleViews;
         }
     }
     return numberOfMultipleViews;
 }
 
-vector<pair<string, float>> calculateDurations(const vector<pair<string, vector<string>>>& sessionTimes) {
-    vector<pair<string, float>> durations;
-    for (pair<string, vector<string>> pair : sessionTimes) {
+deque<pair<string, float>> calculateDurations(const deque<LogItem>& logData) {
+    deque<pair<string, float>> durations;
+    for (auto item : logData) {
         float duration;
-        if (pair.second.size() == 1) {
+        if (item.pathTimes.size() == 1) {
             duration = 0.0f;
         }
         else {
             struct tm latestDateTm;
-            istringstream(pair.second[pair.second.size() - 1]) >> std::get_time(&latestDateTm, "%d/%m/%Y %H:%M:%S");
+            istringstream(item.pathTimes[item.pathTimes.size() - 1].second) >> std::get_time(&latestDateTm, "%d/%m/%Y %H:%M:%S");
 
             struct tm oldestDateTm;
-            istringstream(pair.second[0]) >> std::get_time(&oldestDateTm, "%d/%m/%Y %H:%M:%S");
+            istringstream(item.pathTimes[0].second) >> std::get_time(&oldestDateTm, "%d/%m/%Y %H:%M:%S");
 
             float differenceInSeconds = difftime(mktime(&latestDateTm), mktime(&oldestDateTm));
             duration = differenceInSeconds;
         }
-        durations.push_back({ pair.first, duration });
+        durations.push_back({ item.sessionId, duration });
     }
     return durations;
 }
 
-float calculateAverageDuration(const vector<pair<string, vector<string>>>& sessionTimes) {
-    vector<float> durations;
-    for (pair<string, vector<string>> pair : sessionTimes) {
-        float duration;
-        if (pair.second.size() == 1) {
-            duration = 0.0f;
-        }
-        else {
-            struct tm latestDateTm;
-            istringstream(pair.second[pair.second.size() - 1]) >> std::get_time(&latestDateTm, "%d/%m/%Y %H:%M:%S");
-
-            struct tm oldestDateTm;
-            istringstream(pair.second[0]) >> std::get_time(&oldestDateTm, "%d/%m/%Y %H:%M:%S");
-
-            float differenceInSeconds = difftime(mktime(&latestDateTm), mktime(&oldestDateTm));
-            duration = differenceInSeconds;
-        }
-        durations.push_back(duration);
+float calculateAverageDuration(const deque<pair<string, float>>& sessionDurations) {
+    float totalDuration = 0.0f;
+    for (auto session : sessionDurations) {
+        totalDuration += session.second;
     }
-    auto totalDuration = accumulate(durations.begin(), durations.end(), 0.0);
-    return totalDuration / durations.size();
+    return totalDuration / sessionDurations.size();
 }
 
-vector<string> constructLogJson(const vector<LogItem>& logData) {
-    auto logDataSize = logData.size();
-    vector<string> jsonData;
-    jsonData.push_back("{\n  \"entries\": [\n");
-    int n = 0;
-    for (decltype(logDataSize) i = 0; i < logDataSize; ++i) {
+void constructAndOutputLogJson(const deque<LogItem>& logData, const string& fileName) {
+    concurrency::concurrent_queue<string> jsonData;
+    future<void> f = async(outputToFile, ref(jsonData), ref(fileName));
+    jsonData.push("{\n  \"entries\": [\n");
+    for (auto i = logData.begin(); i != logData.end(); ++i) {
         string outputJSON = "    {\n";
-        outputJSON += "      \"session_id\": \"" + logData[i].sessionId + "\",\n";
-        outputJSON += "      \"ip_address\": \"" + logData[i].ipAddress + "\",\n";
-        outputJSON += "      \"browser\": \"" + logData[i].browser + "\",\n";
+        outputJSON += "      \"session_id\": \"" + (*i).sessionId + "\",\n";
+        outputJSON += "      \"ip_address\": \"" + (*i).ipAddress + "\",\n";
+        outputJSON += "      \"browser\": \"" + (*i).browser + "\",\n";
         outputJSON += "      \"page_views\": [\n";
-        auto pathsSize = logData[i].paths.size();
-        for (decltype(pathsSize) j = 0; j < pathsSize; ++j) {
+        for (auto j = (*i).pathTimes.begin(); j != (*i).pathTimes.end(); ++j) {
             outputJSON += "        {\n";
-            outputJSON += "          \"path\": \"" + logData[i].paths[j] + "\",\n";
-            outputJSON += "          \"time\": \"" + logData[i].times[j] + "\"\n";
+            outputJSON += "          \"path\": \"" + (*j).first + "\",\n";
+            outputJSON += "          \"time\": \"" + (*j).second + "\"\n";
             outputJSON += "        }";
-            if (j != pathsSize - 1) {
+            if (j != (*i).pathTimes.end() - 1) {
                 outputJSON += ",";
             }
             outputJSON += "\n";
         }
         outputJSON += "      ]\n    }";
-        if (i != logDataSize - 1) {
+        if (i != logData.end() - 1) {
             outputJSON += ",";
         }
         outputJSON += "\n";
-        ++n;
+        jsonData.push(move(outputJSON));
     }
-    jsonData.push_back("  ]\n}");
-    cout << "Constructed " << n << " JSON lines should be 1251777\n";
-    return jsonData;
+    jsonData.push("  ]\n}");
+    jsonData.push("NULL");
+    f.get();
 }
 
-vector<string> constructStatisticsJson(const vector<pair<string, float>>& sessions, const float& averageDuration, const int& views) {
-    auto sessionsSize = sessions.size();
-    vector<string> jsonData;
-    jsonData.push_back("{\n  \"time_durations\": [\n");
-    for (decltype(sessionsSize) i = 0; i < sessionsSize; ++i) {
+void constructAndOutputStatisticsJson(const deque<pair<string, float>>& sessions, const float& averageDuration, const int& views, const string& fileName) {
+    concurrency::concurrent_queue<string> jsonData;
+    future<void> f = async(outputToFile, ref(jsonData), ref(fileName));
+    jsonData.push("{\n  \"time_durations\": [\n");
+    for (auto i = sessions.begin(); i != sessions.end(); ++i) {
         string outputJSON = "    {\n";
-        outputJSON += "      \"session_id\": \"" + sessions[i].first + "\",\n";
-        outputJSON += "      \"duration\": " + to_string(sessions[i].second) + "\n";
+        outputJSON += "      \"session_id\": \"" + (*i).first + "\",\n";
+        outputJSON += "      \"duration\": " + to_string((*i).second) + "\n";
         outputJSON += "    }";
-        if (i != sessionsSize - 1) {
+        if (i != sessions.end() - 1) {
             outputJSON += ",";
         }
         outputJSON += "\n";
-        jsonData.push_back(outputJSON);
+        jsonData.push(move(outputJSON));
     }
-    jsonData.push_back("  ],\n");
-    jsonData.push_back("  \"average_duration\": " + to_string(averageDuration) + ",\n");
-    jsonData.push_back("  \"multiple_views\": " + to_string(views) + "\n");
-    jsonData.push_back("}");
-    return jsonData;
-}
-
-void outputToFile(const vector<string>& json, const string& fileName) {
-    ofstream jsonFile(fileName);
-    for (string s : json) {
-        jsonFile << s;
-    }
-    jsonFile.close();
+    jsonData.push("  ],\n");
+    jsonData.push("  \"average_duration\": " + to_string(averageDuration) + ",\n");
+    jsonData.push("  \"multiple_views\": " + to_string(views) + "\n");
+    jsonData.push("}");
+    jsonData.push("NULL");
+    f.get();
 }
 
 int _tmain(int argc, TCHAR* argv[], TCHAR* envp[])
 {
-	int nRetCode = 0;
+    int nRetCode = 0;
 
-	// initialize Microsoft Foundation Classes, and print an error if failure
-	if (!AfxWinInit(::GetModuleHandle(NULL), NULL, ::GetCommandLine(), 0))
-	{
-		_tprintf(_T("Fatal Error: MFC initialization failed\n"));
-		nRetCode = 1;
-	}
-	else
-	{
-		// Application starts here...
+    // initialize Microsoft Foundation Classes, and print an error if failure
+    if (!AfxWinInit(::GetModuleHandle(NULL), NULL, ::GetCommandLine(), 0))
+    {
+        _tprintf(_T("Fatal Error: MFC initialization failed\n"));
+        nRetCode = 1;
+    }
+    else
+    {
+        // Application starts here...
 
-		// Time the application's execution time.
-		TIMER start;	// DO NOT CHANGE THIS LINE. Timing will start here.
+        // Time the application's execution time.
+        TIMER start;	// DO NOT CHANGE THIS LINE. Timing will start here.
 
-		//--------------------------------------------------------------------------------------
-		// Insert your code from here...
+        //--------------------------------------------------------------------------------------
+        // Insert your code from here...
 
         const string testFile = "log";
         ifstream xmlFile(testFile + ".xml");
         string line;
-        circular_buffer<string> logLines(10000);
-        circular_buffer<string> durationLines(10000);
-        circular_buffer<string> addressLines(10000);
-        future<vector<LogItem>> f1 = async(parseLogLines, ref(logLines));
-        future<vector<pair<string, vector<string>>>> f2 = async(parseDurationLines, ref(durationLines));
-        future<int> f3 = async(calculateNumberOfViews, ref(addressLines));
+        concurrency::concurrent_queue<string> queue;
+        future<deque<LogItem>> f1D1 = async(launch::async, parseLogLines, ref(queue));
+        future<deque<LogItem>> f1D2 = async(launch::async, parseLogLines, ref(queue));
+        future<deque<LogItem>> f1D3 = async(launch::async, parseLogLines, ref(queue));
         // Parse XML file
         int i = 0;
         while (getline(xmlFile, line)) {
-            logLines.put(line);
-            durationLines.put(line);
-            addressLines.put(line);
+            queue.push(line);
             ++i;
         }
-        logLines.put("NULL");
-        durationLines.put("NULL");
-        addressLines.put("NULL");
-        cout << "Processed " << i << " lines should be 1251777\n";
+        // push a NULL string for each future
+        queue.push("NULL");
+        queue.push("NULL");
+        queue.push("NULL");
         xmlFile.close();
 
-        vector<pair<string, vector<string>>> sessionTimes = f2.get();
-        cout << "f2 complete\n";
-        cout << "Processed " << sessionTimes.size() << " sessions should be 1251777\n";
-
-        future<vector<pair<string, float>>> f4 = async(calculateDurations, ref(sessionTimes));
-        future<float> f5 = async(calculateAverageDuration, ref(sessionTimes));
-
-        vector<LogItem> logData = f1.get();
+        deque<LogItem> logData(move(f1D1.get()));
+        deque<LogItem> logData2 = f1D2.get();
+        logData.insert(logData.end(), make_move_iterator(logData2.begin()), make_move_iterator(logData2.end()));
+        deque<LogItem> logData3 = f1D3.get();
+        logData.insert(logData.end(), make_move_iterator(logData3.begin()), make_move_iterator(logData3.end()));
         cout << "f1 complete\n";
-        cout << "Processed " << logData.size() << " log items should be 1251777\n";
-        int views = f3.get();
+
+        future<deque<pair<string, float>>> f3 = async(launch::async, calculateDurations, ref(logData));
+        future<int> f5 = async(launch::async, calculateNumberOfViews, ref(logData));
+
+        deque<pair<string, float>> durations = f3.get();
         cout << "f3 complete\n";
-        vector<pair<string, float>> sessionDurations = f4.get();
+
+        future<float> f4 = async(launch::async, calculateAverageDuration, ref(durations));
+        float averageDuration = f4.get();
         cout << "f4 complete\n";
-        float averageDuration = f5.get();
+
+        //future<void> f2 = async(launch::async, constructAndOutputLogJson, ref(logData), testFile + ".json");
+
+        int views = f5.get();
         cout << "f5 complete\n";
-
-        future<vector<string>> f6 = async(constructLogJson, ref(logData));
-        future<vector<string>> f7 = async(constructStatisticsJson, ref(sessionDurations), ref(averageDuration), ref(views));
-        vector<string> logJson = f6.get();
+        
+        future<void> f6 = async(launch::async, constructAndOutputStatisticsJson, ref(durations), ref(averageDuration), ref(views), testFile + "_statistics.json");
+        f6.get();
         cout << "f6 complete\n";
-        future<void> f8 = async(outputToFile, ref(logJson), testFile + ".json");
-        vector<string> statsJson = f7.get();
-        cout << "f7 complete\n";
-        future<void> f9 = async(outputToFile, ref(statsJson), testFile + "_statistics.json");
 
-        f8.get();
-        cout << "f8 complete\n";
-        f9.get();
-        cout << "f9 complete\n";
+        //f2.get();
+        //cout << "f2 complete\n";
         //-------------------------------------------------------------------------------------------------------
-		// How long did it take?...   DO NOT CHANGE FROM HERE...
-		TIMER end;
+        // How long did it take?...   DO NOT CHANGE FROM HERE...
+        TIMER end;
 
-		TIMER elapsed;
-		
-		elapsed = end - start;
+        TIMER elapsed;
 
-		__int64 ticks_per_second = start.get_frequency();
+        elapsed = end - start;
 
-		// Display the resulting time...
+        __int64 ticks_per_second = start.get_frequency();
 
-		double elapsed_seconds = (double)elapsed.get_time() / (double)ticks_per_second;
+        // Display the resulting time...
 
-		cout << "Elapsed time (seconds): " << elapsed_seconds;
-		cout << endl;
-		cout << "Press a key to continue" << endl;
+        double elapsed_seconds = (double)elapsed.get_time() / (double)ticks_per_second;
 
-		char c;
-		cin >> c;
-	}
+        cout << "Elapsed time (seconds): " << elapsed_seconds;
+        cout << endl;
+        cout << "Press a key to continue" << endl;
 
-	return nRetCode;
+        char c;
+        cin >> c;
+    }
+
+    return nRetCode;
 }

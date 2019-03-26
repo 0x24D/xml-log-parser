@@ -57,22 +57,3 @@ times: std::vector<string>>
   "multiple_views": $multiple_views
 }
 ```
-
-## Multithreading
-* Single-threaded:
-  * Read from log.xml
-* Parallel:
-  * Parse to LogData struct (F1)
-  * Parse ID and times of each session (F2)
-  * Calculate total number of views from same IP addresses (F3)
-* After F2 has finished:
-  * Calculate durations (F4)
-  * Calculate average duration (F5)
-* After F1, F3, F4, F5 have finished:
-  * Parallel:
-    * Construct log JSON (F6)
-    * Construct statistics JSON (F7)
-  * Parallel: 
-    * Output to log JSON file (F8)
-    * Output to statistics JSON file (F9)
-Current implementation in release mode takes 193.3 seconds for log.xml

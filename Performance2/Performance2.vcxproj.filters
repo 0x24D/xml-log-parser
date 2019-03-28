@@ -41,12 +41,4 @@
       <Filter>Resource Files</Filter>
     </ResourceCompile>
   </ItemGroup>
-  <ItemGroup>
-    <Xml Include="testdata\1.xml">
-      <Filter>Resource Files</Filter>
-    </Xml>
-    <Xml Include="testdata\2.xml">
-      <Filter>Resource Files</Filter>
-    </Xml>
-  </ItemGroup>
 </Project>

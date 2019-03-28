@@ -5,7 +5,6 @@
 #include "Performance2.h"
 
 #include <algorithm>
-#include <cmath>
 #include <concurrent_queue.h>
 #include <ctime>
 #include <deque>
@@ -15,15 +14,11 @@
 #include <iomanip>  
 #include <iostream>
 #include <istream>
-#include <iterator>
 #include <map>
-#include <mutex>
-#include <numeric>
 #include <ppl.h>
 #include <sstream>
 #include <string>
 #include <thread>
-#include <tuple>
 #include <unordered_map>
 #include <utility>
 
@@ -135,14 +130,14 @@ void outputToFile(const string& line, ofstream& file) {
 
 string constructJsonLine(LogItem& item) {
     string outputJSON = "    {\n";
-    outputJSON += "      \"session_id\": \"" + item.sessionId + "\",\n";
-    outputJSON += "      \"ip_address\": \"" + item.ipAddress + "\",\n";
-    outputJSON += "      \"browser\": \"" + item.browser + "\",\n";
+    outputJSON += R"(      "session_id": ")" + item.sessionId + "\",\n";
+    outputJSON += R"(      "ip_address": ")" + item.ipAddress + "\",\n";
+    outputJSON += R"(      "browser": ")" + item.browser + "\",\n";
     outputJSON += "      \"page_views\": [\n";
     for (auto i = item.pathTimes.begin(); i != item.pathTimes.end(); ++i) {
         outputJSON += "        {\n";
-        outputJSON += "          \"path\": \"" + (*i).first + "\",\n";
-        outputJSON += "          \"time\": \"" + (*i).second + "\"\n";
+        outputJSON += R"(          "path": ")" + (*i).first + "\",\n";
+        outputJSON += R"(          "time": ")" + (*i).second + "\"\n";
         outputJSON += "        }";
         if (i != item.pathTimes.end() - 1) {
             outputJSON += ",";
@@ -191,7 +186,7 @@ LogItem parseLogLine(const string& line) {
         auto timeEndTagBegin = line.find(timeEndTag, pos);
         auto timeBegin = timeStartTagBegin + timeStartTag.length();
         string time(line, timeBegin, timeEndTagBegin - timeBegin);
-        pathTimes.push_back({ move(path), move(time) });
+        pathTimes.emplace_back( move(path), move(time) );
         pos = timeEndTagBegin + timeEndTag.length();
         pathStartTagBegin = line.find(pathStartTag, pos);
     }
@@ -221,9 +216,9 @@ void processLines(concurrency::concurrent_queue<string>& unProcessedLines) {
         int i = 0;
         while (true) {
             string line;
-            auto gotValue = unProcessedLines.try_pop(line);
+            const auto gotValue = unProcessedLines.try_pop(line);
             if (gotValue) {
-                LogItem item = parseLogLine(move(line));
+                auto item = parseLogLine(line);
                 ipAddresses.push(ref(item.ipAddress));
                 logData.push(ref(item));
                 logDataCopy.push(move(item));
@@ -245,9 +240,9 @@ void processLines(concurrency::concurrent_queue<string>& unProcessedLines) {
         int i = 0;
         while (true) {
             LogItem item;
-            auto gotValue = logData.try_pop(item);
+            const auto gotValue = logData.try_pop(item);
             if (gotValue) {
-                string json = "";
+                string json;
                 if (!firstValue) {
                     json += ",\n";
                 }
@@ -269,24 +264,24 @@ void processLines(concurrency::concurrent_queue<string>& unProcessedLines) {
     unordered_map<string, float> durations;
     float averageDuration;
     future<void> fCalculateDurations = async(launch::async, [](concurrency::concurrent_queue<LogItem>& logData, unordered_map<string, float>& durations, float& averageDuration) {
-        int i = 0;
+        auto i = 0;
+        auto total = 0.0f;
         while (true) {
             LogItem item;
-            float total = 0.0f;
-            auto gotValue = logData.try_pop(item);
+            const auto gotValue = logData.try_pop(item);
             if (gotValue) {
                 float duration;
                 if (item.pathTimes.size() == 1) {
                     duration = 0.0f;
                 }
                 else {
-                    struct tm latestDateTm;
+                    struct tm latestDateTm{};
                     istringstream(item.pathTimes[item.pathTimes.size() - 1].second) >> std::get_time(&latestDateTm, "%d/%m/%Y %H:%M:%S");
 
-                    struct tm oldestDateTm;
+                    struct tm oldestDateTm{};
                     istringstream(item.pathTimes[0].second) >> std::get_time(&oldestDateTm, "%d/%m/%Y %H:%M:%S");
 
-                    float differenceInSeconds = difftime(mktime(&latestDateTm), mktime(&oldestDateTm));
+                    const float differenceInSeconds = difftime(mktime(&latestDateTm), mktime(&oldestDateTm));
                     duration = differenceInSeconds;
                 }
                 durations.insert({ item.sessionId, duration });
@@ -307,7 +302,7 @@ void processLines(concurrency::concurrent_queue<string>& unProcessedLines) {
         int i = 0;
         while (true) {
             string ipAddress;
-            auto gotValue = ipAddresses.try_pop(ipAddress);
+            const auto gotValue = ipAddresses.try_pop(ipAddress);
             if (gotValue) {
                 auto it = numberOfViews.find(ipAddress);
                 if (it == numberOfViews.end()) {
@@ -334,16 +329,16 @@ void processLines(concurrency::concurrent_queue<string>& unProcessedLines) {
                     int n = 0;
                     boolean firstValue = true;
                     viewsJson.push("  \"multiple_views\": [\n");
-                    for (auto i = numberOfViews.begin(); i != numberOfViews.end(); ++i) {
-                        if ((*i).second > 1) {
+                    for (const auto& v : numberOfViews) {
+                        if (v.second > 1) {
                             if (!firstValue) {
                                 viewsJson.push(",\n");
                             }
                             firstValue = false;
                             string json = "    {\n      \"ip_address\": \"";
-                            json += (*i).first;
+                            json += v.first;
                             json += "\",\n      \"views\": ";
-                            json += to_string((*i).second);
+                            json += to_string(v.second);
                             json += "\n    }";
                             viewsJson.push(json);
                         }
@@ -362,16 +357,16 @@ void processLines(concurrency::concurrent_queue<string>& unProcessedLines) {
                     int n = 0;
                     boolean firstValue = true;
                     durationsJson.push("  \"durations\": [\n");
-                    for (auto i = durations.begin(); i != durations.end(); ++i) {
-                        cout << (*i).first << "\n";
+                    for (const auto& d : durations) {
+                        cout << d.first << "\n";
                         if (!firstValue) {
                             durationsJson.push(",");
                         }
                         firstValue = false;
                         string json = "    {\n      \"session_id\": \"";
-                        json += (*i).first;
+                        json += d.first;
                         json += "\",\n      \"duration\": ";
-                        json += to_string((*i).second);
+                        json += to_string(d.second);
                         json += "\n    }";
                         durationsJson.push(json);
                         ++n;
@@ -397,9 +392,9 @@ void processLines(concurrency::concurrent_queue<string>& unProcessedLines) {
         int i = 0;
         while (true) {
             string json;
-            auto gotValue = logJson.try_pop(json);
+            const auto gotValue = logJson.try_pop(json);
             if (gotValue) {
-                outputToFile(move(json), ref(jsonFile));
+                outputToFile(json, ref(jsonFile));
                 ++i;
             }
             else if (stopOutputtingToFile && logJson.empty()) {
@@ -411,7 +406,7 @@ void processLines(concurrency::concurrent_queue<string>& unProcessedLines) {
     future<void> fOutputStats = async(launch::async, [](concurrency::concurrent_queue<string>& viewsJson, concurrency::concurrent_queue<string>& durationsJson, const string& fileName) {
         ofstream jsonFile(fileName);
         jsonFile << "{\n";
-        string startWith = "";
+        string startWith;
         atomic<boolean> fileAvailable = true;
         future<void> fOutputViews = async(launch::async, [&startWith, &fileAvailable](concurrency::concurrent_queue<string>& viewsJson, ofstream& jsonFile) {
             bool firstValue = true;
@@ -422,15 +417,15 @@ void processLines(concurrency::concurrent_queue<string>& unProcessedLines) {
                     fileAvailable = false;
                     while (true) {
                         if (firstValue) {
-                            outputToFile(move(startWith), jsonFile);
+                            outputToFile(startWith, jsonFile);
                             firstValue = false;
                             ++i;
                         }
                         else {
                             string json;
-                            auto gotValue = viewsJson.try_pop(json);
+                            const auto gotValue = viewsJson.try_pop(json);
                             if (gotValue) {
-                                outputToFile(move(json), ref(jsonFile));
+                                outputToFile(json, jsonFile);
                                 ++i;
                             }
                             else if (stopOutputtingViewsToFile && viewsJson.empty()) {
@@ -454,15 +449,15 @@ void processLines(concurrency::concurrent_queue<string>& unProcessedLines) {
                     fileAvailable = false;
                     while (true) {
                         if (firstValue) {
-                            outputToFile(move(startWith), jsonFile);
+                            outputToFile(startWith, jsonFile);
                             firstValue = false;
                             ++i;
                         }
                         else {
                             string json;
-                            auto gotValue = durationsJson.try_pop(json);
+                            const auto gotValue = durationsJson.try_pop(json);
                             if (gotValue) {
-                                outputToFile(move(json), ref(jsonFile));
+                                outputToFile(json, jsonFile);
                                 ++i;
                             }
                             else if (stopOutputtingDurationsToFile && durationsJson.empty()) {

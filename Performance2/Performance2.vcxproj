@@ -102,10 +102,6 @@
   <ItemGroup>
     <ResourceCompile Include="Performance2.rc" />
   </ItemGroup>
-  <ItemGroup>
-    <Xml Include="testdata\1.xml" />
-    <Xml Include="testdata\2.xml" />
-  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>

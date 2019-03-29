@@ -195,23 +195,15 @@ LogItem parseLogLine(const string& line) {
 }
 
 atomic<bool> stopParsingLines(false);
-atomic<bool> stopConstructingJson(false);
-atomic<bool> stopOutputtingToFile(false);
-atomic<bool> stopCalculatingViews(false);
-atomic<bool> stopCalculatingDurations(false);
-atomic<bool> stopOutputtingViewsToFile(false);
-atomic<bool> stopOutputtingDurationsToFile(false);
-
-atomic<bool> viewsCalculated(false);
-
-const string testFile = "log";
 
 void processLines(concurrency::concurrent_queue<string>& unProcessedLines) {
     concurrency::concurrent_queue<LogItem> logData;
     concurrency::concurrent_queue<LogItem> logDataCopy;
     concurrency::concurrent_queue<string> ipAddresses;
-    thread tParseLines([](concurrency::concurrent_queue<string>& unProcessedLines, concurrency::concurrent_queue<LogItem>& logData, concurrency::concurrent_queue<LogItem>& logDataCopy, concurrency::concurrent_queue<string>& ipAddresses) {
-        cout << "Parse start\n";
+    atomic<bool> stopConstructingJson(false);
+    atomic<bool> stopCalculatingViews(false);
+    atomic<bool> stopCalculatingDurations(false);
+    thread tParseLines([&stopConstructingJson, &stopCalculatingViews, &stopCalculatingDurations](concurrency::concurrent_queue<string>& unProcessedLines, concurrency::concurrent_queue<LogItem>& logData, concurrency::concurrent_queue<LogItem>& logDataCopy, concurrency::concurrent_queue<string>& ipAddresses) {
         while (true) {
             string line;
             const auto gotValue = unProcessedLines.try_pop(line);
@@ -230,8 +222,8 @@ void processLines(concurrency::concurrent_queue<string>& unProcessedLines) {
         }
     }, ref(unProcessedLines), ref(logData), ref(logDataCopy), ref(ipAddresses));
     concurrency::concurrent_queue<string> logJson;
-    thread tConstructLogJson([](concurrency::concurrent_queue<LogItem>& logData, concurrency::concurrent_queue<string>& logJson) {
-        cout << "Construct log start\n";
+    atomic<bool> stopOutputtingToFile(false);
+    thread tConstructLogJson([&stopConstructingJson, &stopOutputtingToFile](concurrency::concurrent_queue<LogItem>& logData, concurrency::concurrent_queue<string>& logJson) {
         bool firstValue = true;
         logJson.push("{\n  \"entries\": [\n");
         while (true) {
@@ -256,9 +248,9 @@ void processLines(concurrency::concurrent_queue<string>& unProcessedLines) {
         logJson.push("\n  ]\n}");
     }, ref(logData), ref(logJson));
     concurrency::concurrent_queue<pair<string, int>> durations;
+    atomic<bool> stopConstructingDurations(false);
     float averageDuration;
-    thread tCalculateDurations([](concurrency::concurrent_queue<LogItem>& logData, concurrency::concurrent_queue<pair<string, int>>& durations, float& averageDuration) {
-        cout << "Calculate durations start\n";
+    thread tCalculateDurations([&stopCalculatingDurations, &stopConstructingDurations](concurrency::concurrent_queue<LogItem>& logData, concurrency::concurrent_queue<pair<string, int>>& durations, float& averageDuration) {
         auto i = 0;
         auto total = 0;
         while (true) {
@@ -284,14 +276,15 @@ void processLines(concurrency::concurrent_queue<string>& unProcessedLines) {
                 ++i;
             }
             else if (stopCalculatingDurations && logData.empty()) {
+                stopConstructingDurations = true;
                 averageDuration = total / i;
                 break;
             }
         }
     }, ref(logDataCopy), ref(durations), ref(averageDuration));
     map<string, int> numberOfViews;
-    thread tCalculateViews([](concurrency::concurrent_queue<string>& ipAddresses, map<string, int>& numberOfViews) {
-        cout << "Calculate views start\n";
+    atomic<bool> viewsCalculated(false);
+    thread tCalculateViews([&stopCalculatingViews, &viewsCalculated](concurrency::concurrent_queue<string>& ipAddresses, map<string, int>& numberOfViews) {
         while (true) {
             string ipAddress;
             const auto gotValue = ipAddresses.try_pop(ipAddress);
@@ -312,10 +305,10 @@ void processLines(concurrency::concurrent_queue<string>& unProcessedLines) {
     }, ref(ipAddresses), ref(numberOfViews));
     concurrency::concurrent_queue<string> viewsJson;
     concurrency::concurrent_queue<string> durationsJson;
-    thread tConstructStatsJson([](map<string, int>& numberOfViews, concurrency::concurrent_queue<pair<string, int>>& durations, float& averageDuration, concurrency::concurrent_queue<string>& viewsJson, concurrency::concurrent_queue<string>& durationsJson) {
-        cout << "Construct stats start\n";
-        thread tConstructViewsJson([](map<string, int>& numberOfViews, concurrency::concurrent_queue<string>& viewsJson) {
-            cout << "Construct views start\n";
+    atomic<bool> stopOutputtingViewsToFile(false);
+    atomic<bool> stopOutputtingDurationsToFile(false);
+    thread tConstructStatsJson([&stopConstructingDurations, &stopOutputtingViewsToFile, &stopOutputtingDurationsToFile, &viewsCalculated](map<string, int>& numberOfViews, concurrency::concurrent_queue<pair<string, int>>& durations, float& averageDuration, concurrency::concurrent_queue<string>& viewsJson, concurrency::concurrent_queue<string>& durationsJson) {
+        thread tConstructViewsJson([&stopOutputtingViewsToFile, &stopOutputtingDurationsToFile, &viewsCalculated](map<string, int>& numberOfViews, concurrency::concurrent_queue<string>& viewsJson) {
             while (true) {
                 if (viewsCalculated) {
                     boolean firstValue = true;
@@ -340,8 +333,7 @@ void processLines(concurrency::concurrent_queue<string>& unProcessedLines) {
                 }
             }
         }, ref(numberOfViews), ref(viewsJson));
-        thread tConstructDurationsJson([](concurrency::concurrent_queue<pair<string, int>>& durations, float& averageDuration, concurrency::concurrent_queue<string>& durationsJson) {
-            cout << "Construct durations start\n";
+        thread tConstructDurationsJson([&stopConstructingDurations, &stopOutputtingDurationsToFile](concurrency::concurrent_queue<pair<string, int>>& durations, float& averageDuration, concurrency::concurrent_queue<string>& durationsJson) {
             boolean firstValue = true;
             durationsJson.push("  \"durations\": [\n");
             while (true) {
@@ -359,7 +351,7 @@ void processLines(concurrency::concurrent_queue<string>& unProcessedLines) {
                     json += "\n    }";
                     durationsJson.push(json);
                 }
-                else if (stopCalculatingDurations && durations.empty()) {
+                else if (stopConstructingDurations && durations.empty()) {
                     string json = "\n  ],\n";
                     json += "  \"average_duration\": ";
                     json += to_string(averageDuration);
@@ -372,8 +364,7 @@ void processLines(concurrency::concurrent_queue<string>& unProcessedLines) {
         tConstructDurationsJson.join();
         tConstructViewsJson.join();
     }, ref(numberOfViews), ref(durations), ref(averageDuration), ref(viewsJson), ref(durationsJson));
-    thread tOutputLog([](concurrency::concurrent_queue<string>& logJson, const string& fileName) {
-        cout << "Output log start\n";
+    thread tOutputLog([&stopOutputtingToFile](concurrency::concurrent_queue<string>& logJson, const string& fileName) {
         ofstream jsonFile(fileName);
         while (true) {
             string json;
@@ -385,75 +376,61 @@ void processLines(concurrency::concurrent_queue<string>& unProcessedLines) {
                 break;
             }
         }
-    }, ref(logJson), testFile + ".json");
-    thread tOutputStats([](concurrency::concurrent_queue<string>& viewsJson, concurrency::concurrent_queue<string>& durationsJson, const string& fileName) {
-        cout << "Output stats start\n";
+    }, ref(logJson), "log.json");
+    thread tOutputStats([&stopOutputtingViewsToFile, &stopOutputtingDurationsToFile](concurrency::concurrent_queue<string>& viewsJson, concurrency::concurrent_queue<string>& durationsJson, const string& fileName) {
         ofstream jsonFile(fileName);
         jsonFile << "{\n";
         string startWith;
-        atomic<boolean> fileAvailable = true;
-        thread tOutputViews([&startWith, &fileAvailable](concurrency::concurrent_queue<string>& viewsJson, ofstream& jsonFile) {
-            cout << "Output views start\n";
-            bool firstValue = true;
-            bool stopLooping = false;
-            while (!stopLooping) {
-                if (!viewsJson.empty() && fileAvailable) {
-                    fileAvailable = false;
-                    while (true) {
-                        if (firstValue) {
-                            outputToFile(startWith, jsonFile);
-                            firstValue = false;
+        bool firstValue = true;
+        bool stopLooping = false;
+        while (!stopLooping) {
+            if (!durationsJson.empty()) {
+                while (true) {
+                    if (firstValue) {
+                        outputToFile(startWith, jsonFile);
+                        firstValue = false;
+                    }
+                    else {
+                        string json;
+                        const auto gotValue = durationsJson.try_pop(json);
+                        if (gotValue) {
+                            outputToFile(json, jsonFile);
                         }
-                        else {
-                            string json;
-                            const auto gotValue = viewsJson.try_pop(json);
-                            if (gotValue) {
-                                outputToFile(json, jsonFile);
-                            }
-                            else if (stopOutputtingViewsToFile && viewsJson.empty()) {
-                                startWith = ",\n";
-                                fileAvailable = true;
-                                stopLooping = true;
-                                break;
-                            }
+                        else if (stopOutputtingDurationsToFile && durationsJson.empty()) {
+                            startWith = ",\n";
+                            stopLooping = true;
+                            break;
                         }
                     }
                 }
             }
-        }, ref(viewsJson), ref(jsonFile));
-        thread tOutputDurations([&startWith, &fileAvailable](concurrency::concurrent_queue<string>& durationsJson, ofstream& jsonFile) {
-            cout << "Output durations start\n";
-            bool firstValue = true;
-            bool stopLooping = false;
-            while (!stopLooping) {
-                if (!durationsJson.empty() && fileAvailable) {
-                    fileAvailable = false;
-                    while (true) {
-                        if (firstValue) {
-                            outputToFile(startWith, jsonFile);
-                            firstValue = false;
+        }
+        firstValue = true;
+        stopLooping = false;
+        while (!stopLooping) {
+            if (!viewsJson.empty()) {
+                while (true) {
+                    if (firstValue) {
+                        outputToFile(startWith, jsonFile);
+                        firstValue = false;
+                    }
+                    else {
+                        string json;
+                        const auto gotValue = viewsJson.try_pop(json);
+                        if (gotValue) {
+                            outputToFile(json, jsonFile);
                         }
-                        else {
-                            string json;
-                            const auto gotValue = durationsJson.try_pop(json);
-                            if (gotValue) {
-                                outputToFile(json, jsonFile);
-                            }
-                            else if (stopOutputtingDurationsToFile && durationsJson.empty()) {
-                                startWith = ",\n";
-                                fileAvailable = true;
-                                stopLooping = true;
-                                break;
-                            }
+                        else if (stopOutputtingViewsToFile && viewsJson.empty()) {
+                            startWith = ",\n";
+                            stopLooping = true;
+                            break;
                         }
                     }
                 }
             }
-        }, ref(durationsJson), ref(jsonFile));
-        tOutputViews.join();
-        tOutputDurations.join();
+        }
         jsonFile << "\n}";
-    }, ref(viewsJson), ref(durationsJson), testFile + "_statistics.json");
+    }, ref(viewsJson), ref(durationsJson), "statistics.json");
     tParseLines.join();
     tConstructLogJson.join();
     tCalculateDurations.join();
@@ -483,12 +460,10 @@ int _tmain(int argc, TCHAR* argv[], TCHAR* envp[])
         //--------------------------------------------------------------------------------------
         // Insert your code from here...
         ios_base::sync_with_stdio(false);
-        ifstream xmlFile(testFile + ".xml");
+        ifstream xmlFile("log.xml");
         string line;
         concurrency::concurrent_queue<string> q;
         thread t1(processLines, ref(q));
-        // Parse XML file
-        cout << "Main start\n";
         while (getline(xmlFile, line)) {
             q.push(move(line));
         }

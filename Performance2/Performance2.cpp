@@ -159,8 +159,7 @@ auto calculateDurationsAndAverage(concurrency::concurrent_queue<LogItem>& logDat
         }
         else if (stopCalculatingDurations && logData.empty()) {
             stopConstructingDurations = true;
-            // Cast to unsigned to speed up the division
-            averageDuration = static_cast<float>(total) / i;
+            averageDuration = static_cast<float>(total) / static_cast<float>(i);
             break;
         }
     }
@@ -419,8 +418,6 @@ auto parseLines(concurrency::concurrent_queue<string>& unProcessedLines, concurr
         }
     }
 }
-
-
 
 auto processLines(concurrency::concurrent_queue<string>& unProcessedLines) {
     concurrency::concurrent_queue<LogItem> logData;

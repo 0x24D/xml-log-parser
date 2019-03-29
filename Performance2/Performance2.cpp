@@ -161,7 +161,8 @@ auto calculateDurationsAndAverage(concurrency::concurrent_queue<LogItem>& logDat
         }
         else if (stopCalculatingDurations && logData.empty()) {
             stopConstructingDurations = true;
-            averageDuration = total / i;
+            // Cast to unsigned to speed up the division
+            averageDuration = (unsigned)total / i;
             break;
         }
     }
@@ -429,8 +430,10 @@ auto processLines(concurrency::concurrent_queue<string>& unProcessedLines) {
     concurrency::concurrent_queue<LogItem> logDataCopy;
     concurrency::concurrent_queue<string> ipAddresses;
     thread tParseLines(parseLines, ref(unProcessedLines), ref(logData), ref(logDataCopy), ref(ipAddresses));
+
     concurrency::concurrent_queue<string> logJson;
     thread tConstructLogJson(constructLogJson, ref(logData), ref(logJson));
+
     concurrency::concurrent_queue<pair<string, int>> durations;
     float averageDuration;
     thread tCalculateDurations(calculateDurationsAndAverage, ref(logDataCopy), ref(durations), ref(averageDuration));

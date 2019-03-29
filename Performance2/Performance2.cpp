@@ -6,11 +6,11 @@
 
 #include <algorithm>
 #include <concurrent_queue.h>
+#include <cmath>
 #include <ctime>
 #include <deque>
 #include <fstream>
 #include <functional>
-#include <future>
 #include <iomanip>  
 #include <iostream>
 #include <istream>
@@ -19,7 +19,6 @@
 #include <sstream>
 #include <string>
 #include <thread>
-#include <unordered_map>
 #include <utility>
 
 #ifdef _DEBUG
@@ -152,8 +151,7 @@ auto calculateDurationsAndAverage(concurrency::concurrent_queue<LogItem>& logDat
                 struct tm oldestDateTm {};
                 istringstream(item.pathTimes[0].second) >> std::get_time(&oldestDateTm, "%d/%m/%Y %H:%M:%S");
 
-                const int differenceInSeconds = difftime(mktime(&latestDateTm), mktime(&oldestDateTm));
-                duration = move(differenceInSeconds);
+                duration = static_cast<int>(round(difftime(mktime(&latestDateTm), mktime(&oldestDateTm))));
             }
             durations.push({ item.sessionId, duration });
             total += duration;
@@ -162,7 +160,7 @@ auto calculateDurationsAndAverage(concurrency::concurrent_queue<LogItem>& logDat
         else if (stopCalculatingDurations && logData.empty()) {
             stopConstructingDurations = true;
             // Cast to unsigned to speed up the division
-            averageDuration = (unsigned)total / i;
+            averageDuration = static_cast<float>(total) / i;
             break;
         }
     }
@@ -199,7 +197,7 @@ auto constructDurationsJson(concurrency::concurrent_queue<pair<string, int>>& du
                 durationsJson.push(",\n");
             }
             firstValue = false;
-            string json = "    {\n      \"session_id\": \"";
+            string json("    {\n      \"session_id\": \"");
             json += p.first;
             json += "\",\n      \"duration\": ";
             json += to_string(p.second);
@@ -207,7 +205,7 @@ auto constructDurationsJson(concurrency::concurrent_queue<pair<string, int>>& du
             durationsJson.push(json);
         }
         else if (stopConstructingDurations && durations.empty()) {
-            string json = "\n  ],\n";
+            string json("\n  ],\n");
             json += "  \"average_duration\": ";
             json += to_string(averageDuration);
             durationsJson.push(json);
@@ -218,39 +216,34 @@ auto constructDurationsJson(concurrency::concurrent_queue<pair<string, int>>& du
 }
 
 auto constructLogJson(concurrency::concurrent_queue<LogItem>& logData, concurrency::concurrent_queue<string>& logJson) {
-    auto constructJsonLine = [](const LogItem& item) {
-        string outputJSON = "    {\n";
-        outputJSON += R"(      "session_id": ")" + item.sessionId + "\",\n";
-        outputJSON += R"(      "ip_address": ")" + item.ipAddress + "\",\n";
-        outputJSON += R"(      "browser": ")" + item.browser + "\",\n";
-        outputJSON += "      \"page_views\": [\n";
-        for (auto i = item.pathTimes.begin(); i != item.pathTimes.end(); ++i) {
-            outputJSON += "        {\n";
-            outputJSON += R"(          "path": ")" + (*i).first + "\",\n";
-            outputJSON += R"(          "time": ")" + (*i).second + "\"\n";
-            outputJSON += "        }";
-            if (i != item.pathTimes.end() - 1) {
-                outputJSON += ",";
-            }
-            outputJSON += "\n";
-        }
-        outputJSON += "      ]\n    }";
-        return outputJSON;
-    };
-    bool firstValue = true;
+    auto firstValue = true;
     logJson.push("{\n  \"entries\": [\n");
     while (true) {
         LogItem item;
         const auto gotValue = logData.try_pop(item);
         if (gotValue) {
-            string json;
             if (!firstValue) {
-                json += ",\n";
+                logJson.push(",\n");
             }
             else {
                 firstValue = false;
             }
-            json += constructJsonLine(item);
+            string json("    {\n");
+            json += R"(      "session_id": ")" + item.sessionId + "\",\n";
+            json += R"(      "ip_address": ")" + item.ipAddress + "\",\n";
+            json += R"(      "browser": ")" + item.browser + "\",\n";
+            json += "      \"page_views\": [\n";
+            for (auto i = item.pathTimes.begin(); i != item.pathTimes.end(); ++i) {
+                json += "        {\n";
+                json += R"(          "path": ")" + (*i).first + "\",\n";
+                json += R"(          "time": ")" + (*i).second + "\"\n";
+                json += "        }";
+                if (i != item.pathTimes.end() - 1) {
+                    json += ",";
+                }
+                json += "\n";
+            }
+            json += "      ]\n    }";
             logJson.push(move(json));
         }
         else if (stopConstructingJson && logData.empty()) {
@@ -272,7 +265,7 @@ auto constructViewsJson(map<string, int>& numberOfViews, concurrency::concurrent
                         viewsJson.push(",\n");
                     }
                     firstValue = false;
-                    string json = "    {\n      \"ip_address\": \"";
+                    string json("    {\n      \"ip_address\": \"");
                     json += v.first;
                     json += "\",\n      \"views\": ";
                     json += to_string(v.second);
@@ -285,6 +278,11 @@ auto constructViewsJson(map<string, int>& numberOfViews, concurrency::concurrent
             break;
         }
     }
+}
+
+// Required by functions below
+auto outputToFile(const string& line, ofstream& file) {
+    file << line;
 }
 
 auto outputLog(concurrency::concurrent_queue<string>& logJson, const string& fileName) {
@@ -305,8 +303,8 @@ auto outputStatistics(concurrency::concurrent_queue<string>& viewsJson, concurre
     ofstream jsonFile(fileName);
     jsonFile << "{\n";
     string startWith;
-    bool firstValue = true;
-    bool stopLooping = false;
+    auto firstValue = true;
+    auto stopLooping = false;
     while (!stopLooping) {
         if (!durationsJson.empty()) {
             while (true) {
@@ -356,40 +354,18 @@ auto outputStatistics(concurrency::concurrent_queue<string>& viewsJson, concurre
     jsonFile << "\n}";
 }
 
-auto outputToFile(const string& line, ofstream& file) {
-    file << line;
-}
-
-auto parseLines(concurrency::concurrent_queue<string>& unProcessedLines, concurrency::concurrent_queue<LogItem>& logData, concurrency::concurrent_queue<LogItem>& logDataCopy, concurrency::concurrent_queue<string>& ipAddresses) {
-    while (true) {
-        string line;
-        const auto gotValue = unProcessedLines.try_pop(line);
-        if (gotValue) {
-            auto item = parseLogLine(line);
-            ipAddresses.push(ref(item.ipAddress));
-            logData.push(ref(item));
-            logDataCopy.push(move(item));
-        }
-        else if (stopParsingLines && unProcessedLines.empty()) {
-            stopConstructingJson = true;
-            stopCalculatingViews = true;
-            stopCalculatingDurations = true;
-            break;
-        }
-    }
-}
-
+// Required by function below
 auto parseLogLine(const string& line) {
-    const string sessionStartTag = "<sessionid>";
-    const string sessionEndTag = "</sessionid>";
-    const string ipStartTag = "<ipaddress>";
-    const string ipEndTag = "</ipaddress>";
-    const string browserStartTag = "<browser>";
-    const string browserEndTag = "</browser>";
-    const string pathStartTag = "<path>";
-    const string pathEndTag = "</path>";
-    const string timeStartTag = "<time>";
-    const string timeEndTag = "</time>";
+    const string sessionStartTag("<sessionid>");
+    const string sessionEndTag("</sessionid>");
+    const string ipStartTag("<ipaddress>");
+    const string ipEndTag("</ipaddress>");
+    const string browserStartTag("<browser>");
+    const string browserEndTag("</browser>");
+    const string pathStartTag("<path>");
+    const string pathEndTag("</path>");
+    const string timeStartTag("<time>");
+    const string timeEndTag("</time>");
     LogItem item;
     auto sessionStartTagBegin = line.find(sessionStartTag);
     auto sessionEndTagBegin = line.find(sessionEndTag);
@@ -424,6 +400,27 @@ auto parseLogLine(const string& line) {
     item.pathTimes = move(pathTimes);
     return item;
 }
+
+auto parseLines(concurrency::concurrent_queue<string>& unProcessedLines, concurrency::concurrent_queue<LogItem>& logData, concurrency::concurrent_queue<LogItem>& logDataCopy, concurrency::concurrent_queue<string>& ipAddresses) {
+    while (true) {
+        string line;
+        const auto gotValue = unProcessedLines.try_pop(line);
+        if (gotValue) {
+            auto item = parseLogLine(line);
+            ipAddresses.push(ref(item.ipAddress));
+            logData.push(ref(item));
+            logDataCopy.push(move(item));
+        }
+        else if (stopParsingLines && unProcessedLines.empty()) {
+            stopConstructingJson = true;
+            stopCalculatingViews = true;
+            stopCalculatingDurations = true;
+            break;
+        }
+    }
+}
+
+
 
 auto processLines(concurrency::concurrent_queue<string>& unProcessedLines) {
     concurrency::concurrent_queue<LogItem> logData;

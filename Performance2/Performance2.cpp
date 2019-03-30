@@ -14,11 +14,11 @@
 #include <iomanip>  
 #include <iostream>
 #include <istream>
-#include <map>
 #include <ppl.h>
 #include <sstream>
 #include <string>
 #include <thread>
+#include <unordered_map>
 #include <utility>
 
 #ifdef _DEBUG
@@ -165,7 +165,7 @@ auto calculateDurationsAndAverage(concurrency::concurrent_queue<LogItem>& logDat
     }
 }
 
-auto calculateNumberOfViews(concurrency::concurrent_queue<string>& ipAddresses, map<string, int>& numberOfViews) {
+auto calculateNumberOfViews(concurrency::concurrent_queue<string>& ipAddresses, unordered_map<string, int>& numberOfViews) {
     while (true) {
         string ipAddress;
         const auto gotValue = ipAddresses.try_pop(ipAddress);
@@ -253,7 +253,7 @@ auto constructLogJson(concurrency::concurrent_queue<LogItem>& logData, concurren
     logJson.push("\n  ]\n}");
 }
 
-auto constructViewsJson(map<string, int>& numberOfViews, concurrency::concurrent_queue<string>& viewsJson) {
+auto constructViewsJson(unordered_map<string, int>& numberOfViews, concurrency::concurrent_queue<string>& viewsJson) {
     while (true) {
         if (viewsCalculated) {
             boolean firstValue = true;
@@ -432,12 +432,13 @@ auto processLines(concurrency::concurrent_queue<string>& unProcessedLines) {
     float averageDuration;
     thread tCalculateDurations(calculateDurationsAndAverage, ref(logDataCopy), ref(durations), ref(averageDuration));
 
-    map<string, int> numberOfViews;
+    // A unordered mao is optimized for searching (better than ordered map) - A Tour of C++, sections 9.5-9.6
+    unordered_map<string, int> numberOfViews;
     thread tCalculateViews(calculateNumberOfViews, ref(ipAddresses), ref(numberOfViews));
 
     concurrency::concurrent_queue<string> viewsJson;
     concurrency::concurrent_queue<string> durationsJson;
-    thread tConstructStatsJson([](map<string, int>& numberOfViews, concurrency::concurrent_queue<pair<string, int>>& durations, float& averageDuration, 
+    thread tConstructStatsJson([](unordered_map<string, int>& numberOfViews, concurrency::concurrent_queue<pair<string, int>>& durations, float& averageDuration, 
                                                     concurrency::concurrent_queue<string>& viewsJson, concurrency::concurrent_queue<string>& durationsJson) {
         thread tConstructViewsJson(constructViewsJson, ref(numberOfViews), ref(viewsJson));
         thread tConstructDurationsJson(constructDurationsJson, ref(durations), ref(averageDuration), ref(durationsJson));

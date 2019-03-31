@@ -297,47 +297,39 @@ auto outputStatistics(concurrency::concurrent_queue<string> &viewsJson,
   jsonFile << "{\n";
   string startWith;
   auto firstValue = true;
-  auto stopLooping = false;
-  while (!stopLooping) {
+  while (true) {
     if (!durationsJson.empty()) {
-      while (true) {
-        if (firstValue) {
-          outputToFile(startWith, jsonFile);
-          firstValue = false;
-        } else {
-          string json;
-          const auto gotValue = durationsJson.try_pop(json);
-          if (gotValue) {
-            outputToFile(json, jsonFile);
-          } else if (stopOutputtingDurationsToFile && durationsJson.empty()) {
-            startWith = ",\n";
-            stopLooping = true;
-            break;
-          }
+      if (firstValue) {
+        outputToFile(startWith, jsonFile);
+        firstValue = false;
+      } else {
+        string json;
+        const auto gotValue = durationsJson.try_pop(json);
+        if (gotValue) {
+          outputToFile(json, jsonFile);
         }
       }
+    } else if (stopOutputtingDurationsToFile) {
+      startWith = ",\n";
+      break;
     }
   }
   firstValue = true;
-  stopLooping = false;
-  while (!stopLooping) {
+  while (true) {
     if (!viewsJson.empty()) {
-      while (true) {
-        if (firstValue) {
-          outputToFile(startWith, jsonFile);
-          firstValue = false;
-        } else {
-          string json;
-          const auto gotValue = viewsJson.try_pop(json);
-          if (gotValue) {
-            outputToFile(json, jsonFile);
-          } else if (stopOutputtingViewsToFile && viewsJson.empty()) {
-            startWith = ",\n";
-            stopLooping = true;
-            break;
-          }
+      if (firstValue) {
+        outputToFile(startWith, jsonFile);
+        firstValue = false;
+      } else {
+        string json;
+        const auto gotValue = viewsJson.try_pop(json);
+        if (gotValue) {
+          outputToFile(json, jsonFile);
         }
       }
+    } else if (stopOutputtingViewsToFile) {
+      startWith = ",\n";
+      break;
     }
   }
   jsonFile << "\n}";

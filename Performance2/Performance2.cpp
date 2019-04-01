@@ -228,8 +228,8 @@ auto constructLogJson(concurrency::concurrent_queue<LogItem> &logData,
       json += "      \"page_views\": [\n";
       for (auto i = item.pathTimes.begin(); i != item.pathTimes.end(); ++i) {
         json += "        {\n";
-        json += R"(          "path": ")" + (*i).first + "\",\n";
-        json += R"(          "time": ")" + (*i).second + "\"\n";
+        json += R"(          "path": ")" + i->first + "\",\n";
+        json += R"(          "time": ")" + i->second + "\"\n";
         json += "        }";
         if (i != item.pathTimes.end() - 1) {
           json += ",";
